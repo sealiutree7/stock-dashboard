@@ -6,7 +6,7 @@ const US_THEMES=[
 {name:"Crypto",desc:"加密貨幣與交易所",symbols:["COIN","MSTR","MARA","RIOT","IBIT"]},
 {name:"Energy",desc:"能源、核電、電力",symbols:["XLE","CCJ","CEG","VST","GEV"]},
 {name:"Financials",desc:"銀行與金融",symbols:["XLF","JPM","BAC","GS","MS"]},
-{name:"Volatility",desc:"避險與波動",symbols:["VXX","UVXY"]}
+{name:"Volatility",desc:"避險與波動",symbols:["^VIX","UVXY"]}
 ];
 
 const TW_THEMES=[
@@ -331,7 +331,7 @@ function selectUS(s){renderUSTV(s)}
 function selectTW(code,market){renderTWTV(code,market||twStore[code]?.market)}
 
 
-const US_MAJOR_SYMBOLS=["SPY","VOO","QQQ","DIA","IWM","SOXX","SMH","VXX"];
+const US_MAJOR_SYMBOLS=["SPY","VOO","QQQ","DIA","IWM","SOXX","SMH","^VIX"];
 const MARKET_SYMBOLS=["^VIX","BTC-USD","^TNX","DX-Y.NYB","GC=F","CL=F"];
 const TW_MAJOR_CODES=["^TWII","^TWOII"];
 
@@ -457,3 +457,127 @@ async function refreshAll(){
 }
 
 init();
+
+
+// ===== V4.5 Phase 1.2: VIX + update cadence fix =====
+const V45_MAJOR_US_INDEX = ["SPY","VOO","QQQ","DIA","IWM","SOXX","SMH","^VIX"];
+const V45_MARKET_DASHBOARD_SYMBOLS = ["^VIX","BTC-USD","^TNX"];
+
+function v45Label(symbol){
+  const m = {"^VIX":"VIX","BTC-USD":"BTC","^TNX":"US10Y"};
+  return m[symbol] || symbol;
+}
+
+// Prefer true VIX (^VIX) instead of VXX proxy.
+// Quote refresh: 5s. Theme refresh: 5min.
+window.V45_QUOTE_REFRESH_MS = 5000;
+window.V45_THEME_REFRESH_MS = 300000;
+
+async function v45FetchQuotes(symbols){
+  if(typeof api !== "function") return null;
+  return await api(`/api/session-quotes?symbols=${encodeURIComponent(symbols.join(","))}`);
+}
+
+function v45QuoteValue(q){
+  return q?.main?.price ?? q?.price ?? null;
+}
+function v45QuotePct(q){
+  return q?.main?.pct ?? q?.changePercent ?? null;
+}
+function v45QuoteChange(q){
+  return q?.main?.change ?? q?.change ?? null;
+}
+function v45ColorClass(v){
+  // 台股色系：漲/流入=紅色，跌/流出=綠色
+  return Number(v)>0 ? "tw-up" : Number(v)<0 ? "tw-down" : "flat";
+}
+function v45ChangeHtml(ch,pct){
+  if(ch===null||ch===undefined||pct===null||pct===undefined) return `<span class="flat">--</span>`;
+  const sign = Number(ch)>0 ? "+" : "";
+  return `<span class="${v45ColorClass(ch)}">${sign}${fmt(ch)} (${sign}${fmt(pct)}%)</span>`;
+}
+
+async function v45LoadMarketDashboard(){
+  try{
+    const data = await v45FetchQuotes(V45_MARKET_DASHBOARD_SYMBOLS);
+    const map = {};
+    (data?.results||[]).forEach(x=>{ if(x.ok) map[x.quote.symbol]=x.quote; });
+
+    const vix = map["^VIX"];
+    const btc = map["BTC-USD"];
+    const tnx = map["^TNX"];
+
+    const vixPrice = v45QuoteValue(vix);
+    const btcPrice = v45QuoteValue(btc);
+    const tnxPrice = v45QuoteValue(tnx);
+    const vixPct = v45QuotePct(vix);
+    const btcPct = v45QuotePct(btc);
+
+    const riskEl = document.getElementById("usRisk");
+    const vixEl = document.getElementById("vixValue");
+    const btcEl = document.getElementById("btcValue");
+    const bondEl = document.getElementById("bond10y");
+
+    let risk = "🟡 Neutral";
+    if(Number(vixPrice)<20 && Number(btcPct)>0) risk = "🔴 Risk ON";
+    if(Number(vixPrice)>25) risk = "🟢 Risk OFF";
+
+    if(riskEl) riskEl.innerHTML = risk + `<div class="summary-sub">VIX / BTC / 10Y 綜合判斷</div>`;
+    if(vixEl) vixEl.innerHTML = `${fmt(vixPrice)} ${v45ChangeHtml(v45QuoteChange(vix), vixPct)}<div class="summary-sub">恐慌指數 ^VIX</div>`;
+    if(btcEl) btcEl.innerHTML = `${fmt(btcPrice,0)} ${v45ChangeHtml(v45QuoteChange(btc), btcPct)}<div class="summary-sub">風險資產</div>`;
+    if(bondEl) bondEl.innerHTML = `${fmt(tnxPrice)}<div class="summary-sub">美債10年期 ^TNX</div>`;
+  }catch(e){
+    console.warn("v45LoadMarketDashboard failed", e);
+  }
+}
+
+async function v45LoadMajorIndexBoard(){
+  const el = document.getElementById("majorIndexBoard");
+  if(!el) return;
+  try{
+    const data = await v45FetchQuotes(V45_MAJOR_US_INDEX);
+    el.innerHTML = (data?.results||[]).map(x=>{
+      if(!x.ok) return `<div class="card"><div class="symbol"><span>${v45Label(x.symbol)}</span><span>Error</span></div><div class="card-meta">${x.error}</div></div>`;
+      const q = x.quote;
+      const m = q.main || {};
+      return `<div class="card">
+        <div class="symbol"><span>${v45Label(q.symbol)}</span><span>${v45Label(q.symbol)}</span></div>
+        <div class="session-line">目前：<span class="session-badge">${m.label||"--"}</span></div>
+        <div class="price">${fmt(m.price)}</div>
+        <div class="change">${v45ChangeHtml(m.change,m.pct)}</div>
+        <div class="segment-grid">
+          ${seg("盤前最後",q.segments?.pre)}
+          ${seg("日盤收盤",q.segments?.dayClose)}
+          ${seg("夜盤最後",q.segments?.nightClose)}
+        </div>
+        <div class="card-meta">Updated ${q.updatedAt?new Date(q.updatedAt).toLocaleTimeString():"--"}</div>
+      </div>`;
+    }).join("");
+  }catch(e){
+    el.innerHTML = `<div class="card"><div class="symbol"><span>Major Index</span><span>Error</span></div><div class="card-meta">${e.message}</div></div>`;
+  }
+}
+
+async function v45FastRefresh(){
+  await Promise.all([
+    v45LoadMarketDashboard(),
+    v45LoadMajorIndexBoard(),
+    typeof loadUSWatchlist === "function" ? loadUSWatchlist() : Promise.resolve(),
+    typeof loadTWWatchlist === "function" ? loadTWWatchlist() : Promise.resolve()
+  ]);
+  const st = document.getElementById("refreshStatus");
+  if(st) st.textContent = `Auto updated ${new Date().toLocaleTimeString()} · 5s`;
+}
+
+async function v45ThemeRefresh(){
+  if(typeof loadThemeUniverses === "function"){
+    await loadThemeUniverses();
+  }
+}
+
+// Disable old fixed interval if possible by replacing global refresh scheduling with our own on load.
+window.addEventListener("load", ()=>{
+  setTimeout(()=>{ v45FastRefresh(); v45ThemeRefresh(); }, 300);
+  setInterval(v45FastRefresh, V45_QUOTE_REFRESH_MS);
+  setInterval(v45ThemeRefresh, V45_THEME_REFRESH_MS);
+});
