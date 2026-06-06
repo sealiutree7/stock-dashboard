@@ -347,3 +347,18 @@ async function refreshAll(){
 }
 
 init();
+
+
+// ===== V4.5 Phase1 Scaffold =====
+const MAJOR_US_INDEX=["SPY","VOO","QQQ","DIA","IWM","SOXX","SMH","VXX"];
+
+async function loadMajorIndexBoard(){
+  const el=document.getElementById("majorIndexBoard");
+  if(!el) return;
+  el.innerHTML=MAJOR_US_INDEX.map(x=>`<div class="card"><div class="symbol">${x}</div><div class="price">Loading...</div></div>`).join("");
+}
+const __oldInit = init;
+init = function(){
+  __oldInit();
+  loadMajorIndexBoard();
+}

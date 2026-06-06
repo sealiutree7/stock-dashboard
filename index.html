@@ -11,6 +11,21 @@
 <section class="panel controls"><div class="field"><label>Cloudflare Worker API URL</label><input id="apiBase" placeholder="例如：https://stock-session-worker.xxx.workers.dev"/></div><button id="refreshBtn">更新全部</button></section>
 
 <main id="usPage" class="page active">
+<section class="panel">
+<div class="section-title"><h2>市場儀表板 Market Dashboard</h2><span>Risk On / Risk Off Monitor</span></div>
+<div class="summary-grid">
+<div class="summary-card"><div class="summary-label">美股情緒</div><div class="summary-main" id="usRisk">--</div></div>
+<div class="summary-card"><div class="summary-label">VIX</div><div class="summary-main" id="vixValue">--</div></div>
+<div class="summary-card"><div class="summary-label">BTC</div><div class="summary-main" id="btcValue">--</div></div>
+<div class="summary-card"><div class="summary-label">US10Y</div><div class="summary-main" id="bond10y">--</div></div>
+</div>
+</section>
+
+<section class="panel">
+<div class="section-title"><h2>大盤指數</h2><span>SPY / QQQ / SOXX / DIA / IWM</span></div>
+<div id="majorIndexBoard" class="grid watch-grid"></div>
+</section>
+
 <section class="panel controls compact"><div class="field"><label>美股自選，逗號分隔</label><input id="usSymbols" value="NVDA, AMD, AVGO, TSLA, SOXX, MU, INTC, TSM, PLTR, ARM, SMCI, QQQ, SPY"/></div></section>
 <section class="panel"><div class="section-title"><h2>美股題材熱度</h2><span>點排行或地圖只聚焦題材，不更動自選清單</span></div><div class="summary-grid"><div class="summary-card hot"><div class="summary-label">最熱題材</div><div class="summary-main" id="usTopTheme">--</div><div class="summary-sub" id="usTopThemeDesc">等待更新</div></div><div class="summary-card"><div class="summary-label">最強個股</div><div class="summary-main" id="usTopStock">--</div><div class="summary-sub" id="usTopStockDesc">--</div></div><div class="summary-card"><div class="summary-label">上漲家數比例</div><div class="summary-main" id="usBreadth">--</div><div class="summary-sub">Theme universe breadth</div></div><div class="summary-card"><div class="summary-label">市場狀態</div><div class="summary-main" id="usMarketMode">--</div><div class="summary-sub" id="usMarketModeDesc">--</div></div></div><div id="usThemeRank" class="rank-list"></div></section>
 <section class="panel"><div class="section-title"><h2>美股題材地圖</h2><span>點題材只聚焦熱度，不改自選清單</span></div><div id="usThemeMap" class="theme-map"></div></section>
