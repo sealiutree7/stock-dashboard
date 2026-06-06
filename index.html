@@ -1,6 +1,9 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
-<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Stock Terminal US / TW</title><link rel="stylesheet" href="style.css"/></head>
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Stock Terminal US / TW</title><link rel="stylesheet" href="style.css"/>
+</head>
 <body>
 <div class="app">
 <header class="topbar"><div><h1>Stock Terminal</h1><p>US / TW market dashboard · Cloudflare Worker · Yahoo session data</p></div><div class="right-status"><div class="status-pill" id="session">Checking...</div><div class="refresh-status" id="refreshStatus">Ready</div></div></header>
@@ -10,16 +13,17 @@
 <main id="usPage" class="page active">
 <section class="panel controls compact"><div class="field"><label>美股自選，逗號分隔</label><input id="usSymbols" value="NVDA, AMD, AVGO, TSLA, SOXX, MU, INTC, TSM, PLTR, ARM, SMCI, QQQ, SPY"/></div></section>
 <section class="panel"><div class="section-title"><h2>美股題材熱度</h2><span>點排行或地圖可切換相關股票</span></div><div class="summary-grid"><div class="summary-card hot"><div class="summary-label">最熱題材</div><div class="summary-main" id="usTopTheme">--</div><div class="summary-sub" id="usTopThemeDesc">等待更新</div></div><div class="summary-card"><div class="summary-label">最強個股</div><div class="summary-main" id="usTopStock">--</div><div class="summary-sub" id="usTopStockDesc">--</div></div><div class="summary-card"><div class="summary-label">上漲家數比例</div><div class="summary-main" id="usBreadth">--</div><div class="summary-sub">Theme universe breadth</div></div><div class="summary-card"><div class="summary-label">市場狀態</div><div class="summary-main" id="usMarketMode">--</div><div class="summary-sub" id="usMarketModeDesc">--</div></div></div><div id="usThemeRank" class="rank-list"></div></section>
-<section class="panel"><div class="section-title"><h2>美股題材地圖</h2><span>依題材池即時計算，不侷限目前自選</span></div><div id="usThemeMap" class="theme-map"></div></section>
-<section class="panel"><div class="section-title"><h2>美股自選清單</h2><span>價格異動會閃動 · 每 5 秒自動更新</span></div><div class="chips" id="usChips"></div><div class="grid cards watch-grid" id="usCards"></div></section>
-<section class="panel chart-panel"><div class="section-title"><div><h2 id="chartTitle">NVDA TradingView Chart</h2><p class="hint">TradingView 圖表：Volume / RSI / MACD。</p></div><div class="range-buttons"><button class="mini active" data-interval="5">5m</button><button class="mini" data-interval="15">15m</button><button class="mini" data-interval="60">1h</button><button class="mini" data-interval="D">1D</button></div></div><div id="tvChart"></div></section>
+<section class="panel"><div class="section-title"><h2>美股題材地圖</h2><span>依題材池即時計算</span></div><div id="usThemeMap" class="theme-map"></div></section>
+<section class="panel"><div class="section-title"><h2>美股自選清單</h2><span>點卡片切換下方 TradingView</span></div><div class="chips" id="usChips"></div><div class="grid cards watch-grid" id="usCards"></div></section>
+<section class="panel chart-panel"><div class="section-title"><div><h2 id="usChartTitle">NVDA TradingView Chart</h2><p class="hint">美股圖表：Volume / RSI / MACD。</p></div></div><div id="usTvChart"></div></section>
 </main>
 
 <main id="twPage" class="page">
 <section class="panel controls compact"><div class="field"><label>台股自選，逗號分隔</label><input id="twSymbols" value="2330, 2454, 2308, 2317, 3443, 3661, 2379, 3034, 6669, 4763, 3450, 6531"/></div></section>
 <section class="panel"><div class="section-title"><h2>台股題材熱度</h2><span>點排行或地圖可切換相關股票</span></div><div class="summary-grid"><div class="summary-card hot"><div class="summary-label">最熱題材</div><div class="summary-main" id="twTopTheme">--</div><div class="summary-sub" id="twTopThemeDesc">等待更新</div></div><div class="summary-card"><div class="summary-label">最強個股</div><div class="summary-main" id="twTopStock">--</div><div class="summary-sub" id="twTopStockDesc">--</div></div><div class="summary-card"><div class="summary-label">上漲家數比例</div><div class="summary-main" id="twBreadth">--</div><div class="summary-sub">Theme universe breadth</div></div><div class="summary-card"><div class="summary-label">市場狀態</div><div class="summary-main" id="twMarketMode">--</div><div class="summary-sub" id="twMarketModeDesc">--</div></div></div><div id="twThemeRank" class="rank-list"></div></section>
 <section class="panel"><div class="section-title"><h2>台股題材地圖</h2><span>題材熱度與自選清單分開計算</span></div><div id="twThemeMap" class="theme-map"></div></section>
-<section class="panel"><div class="section-title"><h2>台股自選清單</h2><span>Yahoo Finance：上市 .TW / 上櫃 .TWO 自動判斷</span></div><div class="chips" id="twChips"></div><div class="grid cards watch-grid" id="twCards"></div></section>
+<section class="panel"><div class="section-title"><h2>台股自選清單</h2><span>點卡片切換下方 TradingView 台股圖表</span></div><div class="chips" id="twChips"></div><div class="grid cards watch-grid" id="twCards"></div></section>
+<section class="panel chart-panel"><div class="section-title"><div><h2 id="twChartTitle">2330 台積電 TradingView Chart</h2><p class="hint">台股圖表：上市 TWSE，上櫃 TPEX。</p></div></div><div id="twTvChart"></div></section>
 </main>
 <footer>資料可能延遲，非投資建議。美股與台股皆透過 Worker 代理 Yahoo Finance。</footer>
 </div><script src="app.js"></script>
