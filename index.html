@@ -3,15 +3,15 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>US AI Stock Terminal</title>
+  <title>Stock Terminal US / TW</title>
   <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
 <div class="app">
   <header class="topbar">
     <div>
-      <h1>US AI Stock Terminal</h1>
-      <p>GitHub Pages + Cloudflare Worker · Yahoo session data · TradingView chart</p>
+      <h1>Stock Terminal</h1>
+      <p>US / TW market dashboard · Cloudflare Worker · Session price map</p>
     </div>
     <div class="right-status">
       <div class="status-pill" id="session">Checking...</div>
@@ -19,81 +19,117 @@
     </div>
   </header>
 
+  <nav class="tabs">
+    <button class="tab active" data-page="usPage">美股頁面</button>
+    <button class="tab" data-page="twPage">台股頁面</button>
+  </nav>
+
   <section class="panel controls">
     <div class="field">
       <label>Cloudflare Worker API URL</label>
-      <input id="apiBase" placeholder="例如：https://your-worker.yourname.workers.dev"/>
+      <input id="apiBase" placeholder="例如：https://stock-session-worker.xxx.workers.dev"/>
     </div>
-    <div class="field">
-      <label>自選股，逗號分隔</label>
-      <input id="symbols" value="SATL, TSLA, NVDA, AVGO, AMD, SOXX, MU, INTC, TSM"/>
-    </div>
-    <button id="refreshBtn">更新</button>
+    <button id="refreshBtn">更新全部</button>
   </section>
 
-  <section class="panel logic">
-    <div class="logic-card"><strong>日盤</strong><span>主價：日盤即時 / 收盤｜參考：夜盤最後</span></div>
-    <div class="logic-card"><strong>夜盤</strong><span>主價：夜盤最後｜參考：日盤收盤</span></div>
-    <div class="logic-card"><strong>盤前</strong><span>主價：盤前最後｜參考：日盤收盤</span></div>
-  </section>
-
-  <section class="panel">
-    <div class="section-title">
-      <h2>Market Heat</h2>
-      <span>依 AI 供應鏈分組計算熱度</span>
-    </div>
-    <div class="summary-grid">
-      <div class="summary-card hot"><div class="summary-label">最熱產業</div><div class="summary-main" id="topSector">--</div><div class="summary-sub" id="topSectorDesc">等待更新</div></div>
-      <div class="summary-card"><div class="summary-label">最強個股</div><div class="summary-main" id="topStock">--</div><div class="summary-sub" id="topStockDesc">--</div></div>
-      <div class="summary-card"><div class="summary-label">上漲家數比例</div><div class="summary-main" id="breadth">--</div><div class="summary-sub">Watchlist breadth</div></div>
-      <div class="summary-card"><div class="summary-label">市場狀態</div><div class="summary-main" id="marketMode">--</div><div class="summary-sub" id="marketModeDesc">--</div></div>
-    </div>
-    <div id="sectorRank" class="rank-list"></div>
-  </section>
-
-  <section class="panel">
-    <div class="section-title">
-      <h2>AI Supply Chain Map</h2>
-      <span>點產業區塊可快速切換自選股</span>
-    </div>
-    <div id="supplyMap" class="supply-map"></div>
-  </section>
-
-  <section class="panel">
-    <div class="section-title">
-      <h2>Major Index</h2>
-      <span>SPY / QQQ / DIA / IWM / SOXX / VXX</span>
-    </div>
-    <div class="grid cards index-grid" id="indexCards"></div>
-  </section>
-
-  <section class="panel">
-    <div class="section-title">
-      <h2>Watchlist</h2>
-      <span>價格異動會閃動提示 · 每 5 秒自動更新</span>
-    </div>
-    <div class="chips" id="chips"></div>
-    <div class="grid cards watch-grid" id="stockCards"></div>
-  </section>
-
-  <section class="panel chart-panel">
-    <div class="section-title">
-      <div>
-        <h2 id="chartTitle">SATL TradingView Chart</h2>
-        <p class="hint">圖表由 TradingView 提供；報價卡由 Worker 代理 Yahoo session 資料。</p>
+  <main id="usPage" class="page active">
+    <section class="panel controls compact">
+      <div class="field">
+        <label>美股自選，逗號分隔</label>
+        <input id="usSymbols" value="NVDA, AMD, AVGO, TSLA, SOXX, MU, INTC, TSM, PLTR, ARM, SMCI, QQQ, SPY"/>
       </div>
-      <div class="range-buttons">
-        <button class="mini active" data-interval="5">5m</button>
-        <button class="mini" data-interval="15">15m</button>
-        <button class="mini" data-interval="60">1h</button>
-        <button class="mini" data-interval="D">1D</button>
+    </section>
+
+    <section class="panel">
+      <div class="section-title">
+        <h2>美股題材熱度</h2>
+        <span>依題材池內股票即時漲跌幅排名</span>
       </div>
-    </div>
-    <div id="tvChart"></div>
-  </section>
+      <div class="summary-grid">
+        <div class="summary-card hot"><div class="summary-label">最熱題材</div><div class="summary-main" id="usTopTheme">--</div><div class="summary-sub" id="usTopThemeDesc">等待更新</div></div>
+        <div class="summary-card"><div class="summary-label">最強個股</div><div class="summary-main" id="usTopStock">--</div><div class="summary-sub" id="usTopStockDesc">--</div></div>
+        <div class="summary-card"><div class="summary-label">上漲家數比例</div><div class="summary-main" id="usBreadth">--</div><div class="summary-sub">US watchlist breadth</div></div>
+        <div class="summary-card"><div class="summary-label">市場狀態</div><div class="summary-main" id="usMarketMode">--</div><div class="summary-sub" id="usMarketModeDesc">--</div></div>
+      </div>
+      <div id="usThemeRank" class="rank-list"></div>
+    </section>
+
+    <section class="panel">
+      <div class="section-title">
+        <h2>美股題材地圖</h2>
+        <span>點題材區塊可快速切換自選清單</span>
+      </div>
+      <div id="usThemeMap" class="theme-map"></div>
+    </section>
+
+    <section class="panel">
+      <div class="section-title">
+        <h2>美股自選清單</h2>
+        <span>價格異動會閃動 · 每 5 秒自動更新</span>
+      </div>
+      <div class="chips" id="usChips"></div>
+      <div class="grid cards watch-grid" id="usCards"></div>
+    </section>
+
+    <section class="panel chart-panel">
+      <div class="section-title">
+        <div>
+          <h2 id="chartTitle">NVDA TradingView Chart</h2>
+          <p class="hint">TradingView 圖表：Volume / RSI / MACD。</p>
+        </div>
+        <div class="range-buttons">
+          <button class="mini active" data-interval="5">5m</button>
+          <button class="mini" data-interval="15">15m</button>
+          <button class="mini" data-interval="60">1h</button>
+          <button class="mini" data-interval="D">1D</button>
+        </div>
+      </div>
+      <div id="tvChart"></div>
+    </section>
+  </main>
+
+  <main id="twPage" class="page">
+    <section class="panel controls compact">
+      <div class="field">
+        <label>台股自選，逗號分隔</label>
+        <input id="twSymbols" value="2330, 2454, 2308, 2317, 3443, 3661, 2379, 3034, 6669, 4763, 3450, 6531"/>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="section-title">
+        <h2>台股題材熱度</h2>
+        <span>依題材池內股票即時漲跌幅排名</span>
+      </div>
+      <div class="summary-grid">
+        <div class="summary-card hot"><div class="summary-label">最熱題材</div><div class="summary-main" id="twTopTheme">--</div><div class="summary-sub" id="twTopThemeDesc">等待更新</div></div>
+        <div class="summary-card"><div class="summary-label">最強個股</div><div class="summary-main" id="twTopStock">--</div><div class="summary-sub" id="twTopStockDesc">--</div></div>
+        <div class="summary-card"><div class="summary-label">上漲家數比例</div><div class="summary-main" id="twBreadth">--</div><div class="summary-sub">TW watchlist breadth</div></div>
+        <div class="summary-card"><div class="summary-label">市場狀態</div><div class="summary-main" id="twMarketMode">--</div><div class="summary-sub" id="twMarketModeDesc">--</div></div>
+      </div>
+      <div id="twThemeRank" class="rank-list"></div>
+    </section>
+
+    <section class="panel">
+      <div class="section-title">
+        <h2>台股題材地圖</h2>
+        <span>點題材區塊可快速切換自選清單</span>
+      </div>
+      <div id="twThemeMap" class="theme-map"></div>
+    </section>
+
+    <section class="panel">
+      <div class="section-title">
+        <h2>台股自選清單</h2>
+        <span>TWSE / TPEX 公開報價</span>
+      </div>
+      <div class="chips" id="twChips"></div>
+      <div class="grid cards watch-grid" id="twCards"></div>
+    </section>
+  </main>
 
   <footer>
-    靜態前端可放 GitHub Pages；Yahoo Finance 由 Cloudflare Worker 代理。資料可能延遲，非投資建議。
+    資料可能延遲，非投資建議。美股由 Yahoo chart via Worker；台股由 TWSE/TPEX 公開報價 via Worker。
   </footer>
 </div>
 <script src="app.js"></script>
