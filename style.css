@@ -8,3 +8,8 @@
   border-color:rgba(0,183,255,.9)!important;
   box-shadow:0 0 22px rgba(0,183,255,.18);
 }
+
+/* V4.5 Taiwan-style color convention */
+.up{color:#ff3366!important;}
+.down{color:#00ff95!important;}
+#txfChart{width:100%;height:520px;border-radius:14px;overflow:hidden;border:1px solid rgba(0,183,255,.25);background:#0f172a}

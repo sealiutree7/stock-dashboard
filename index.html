@@ -12,18 +12,18 @@
 
 <main id="usPage" class="page active">
 <section class="panel">
-<div class="section-title"><h2>市場儀表板 Market Dashboard</h2><span>Risk On / Risk Off Monitor</span></div>
-<div class="summary-grid">
-<div class="summary-card"><div class="summary-label">美股情緒</div><div class="summary-main" id="usRisk">--</div></div>
-<div class="summary-card"><div class="summary-label">VIX</div><div class="summary-main" id="vixValue">--</div></div>
-<div class="summary-card"><div class="summary-label">BTC</div><div class="summary-main" id="btcValue">--</div></div>
-<div class="summary-card"><div class="summary-label">US10Y</div><div class="summary-main" id="bond10y">--</div></div>
-</div>
+  <div class="section-title"><h2>市場儀表板 Market Dashboard</h2><span>Risk On / Risk Off Monitor</span></div>
+  <div class="summary-grid" id="marketDashboardCards">
+    <div class="summary-card"><div class="summary-label">美股情緒</div><div class="summary-main" id="usRisk">--</div><div class="summary-sub" id="usRiskDesc">等待更新</div></div>
+    <div class="summary-card"><div class="summary-label">VIX</div><div class="summary-main" id="vixValue">--</div><div class="summary-sub">恐慌指數</div></div>
+    <div class="summary-card"><div class="summary-label">BTC</div><div class="summary-main" id="btcValue">--</div><div class="summary-sub">風險資產</div></div>
+    <div class="summary-card"><div class="summary-label">US10Y</div><div class="summary-main" id="bond10y">--</div><div class="summary-sub">美債10年期</div></div>
+  </div>
 </section>
 
 <section class="panel">
-<div class="section-title"><h2>大盤指數</h2><span>SPY / QQQ / SOXX / DIA / IWM</span></div>
-<div id="majorIndexBoard" class="grid watch-grid"></div>
+  <div class="section-title"><h2>大盤指數</h2><span>SPY / VOO / QQQ / DIA / IWM / SOXX / SMH / VXX</span></div>
+  <div class="grid cards watch-grid" id="usMajorCards"></div>
 </section>
 
 <section class="panel controls compact"><div class="field"><label>美股自選，逗號分隔</label><input id="usSymbols" value="NVDA, AMD, AVGO, TSLA, SOXX, MU, INTC, TSM, PLTR, ARM, SMCI, QQQ, SPY"/></div></section>
@@ -34,6 +34,26 @@
 </main>
 
 <main id="twPage" class="page">
+<section class="panel">
+  <div class="section-title"><h2>大盤指數</h2><span>加權指數 / 櫃買指數 / 電子指數 / 金融指數 / 台指期</span></div>
+  <div class="grid cards watch-grid" id="twMajorCards"></div>
+</section>
+
+<section class="panel chart-panel">
+  <div class="section-title"><div><h2>台指期即時圖</h2><p class="hint">獨立台指期圖表，不影響下方個股圖。</p></div></div>
+  <div id="txfChart"></div>
+</section>
+
+<section class="panel">
+  <div class="section-title"><h2>景氣訊號燈</h2><span>目前先用固定展示資料，下一版接國發會資料</span></div>
+  <div class="summary-grid">
+    <div class="summary-card hot"><div class="summary-label">目前燈號</div><div class="summary-main">黃紅燈</div><div class="summary-sub">景氣偏熱 / 復甦延續</div></div>
+    <div class="summary-card"><div class="summary-label">分數</div><div class="summary-main">31</div><div class="summary-sub">示意值</div></div>
+    <div class="summary-card"><div class="summary-label">前期</div><div class="summary-main">黃藍燈</div><div class="summary-sub">示意值</div></div>
+    <div class="summary-card"><div class="summary-label">判讀</div><div class="summary-main">復甦期</div><div class="summary-sub">仍需搭配指數與資金流</div></div>
+  </div>
+</section>
+
 <section class="panel controls compact"><div class="field"><label>台股自選，逗號分隔</label><input id="twSymbols" value="2330, 2454, 2308, 2317, 3443, 3661, 2379, 3034, 6669, 4763, 3450, 6531"/></div></section>
 <section class="panel"><div class="section-title"><h2>台股題材熱度</h2><span>點排行或地圖只聚焦題材，不更動自選清單</span></div><div class="summary-grid"><div class="summary-card hot"><div class="summary-label">最熱題材</div><div class="summary-main" id="twTopTheme">--</div><div class="summary-sub" id="twTopThemeDesc">等待更新</div></div><div class="summary-card"><div class="summary-label">最強個股</div><div class="summary-main" id="twTopStock">--</div><div class="summary-sub" id="twTopStockDesc">--</div></div><div class="summary-card"><div class="summary-label">上漲家數比例</div><div class="summary-main" id="twBreadth">--</div><div class="summary-sub">Theme universe breadth</div></div><div class="summary-card"><div class="summary-label">市場狀態</div><div class="summary-main" id="twMarketMode">--</div><div class="summary-sub" id="twMarketModeDesc">--</div></div></div><div id="twThemeRank" class="rank-list"></div></section>
 <section class="panel"><div class="section-title"><h2>台股題材地圖</h2><span>點題材只聚焦熱度，不改自選清單</span></div><div id="twThemeMap" class="theme-map"></div></section>

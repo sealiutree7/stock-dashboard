@@ -96,7 +96,7 @@ function init(){
   });
 
   refreshAll();
-  setInterval(refreshAll,5000);
+  setInterval(refreshAll,15000);
 }
 
 function renderChips(elId,symbols,type){
@@ -330,35 +330,130 @@ function renderTWTV(code,market){
 function selectUS(s){renderUSTV(s)}
 function selectTW(code,market){renderTWTV(code,market||twStore[code]?.market)}
 
+
+const US_MAJOR_SYMBOLS=["SPY","VOO","QQQ","DIA","IWM","SOXX","SMH","VXX"];
+const MARKET_SYMBOLS=["^VIX","BTC-USD","^TNX","DX-Y.NYB","GC=F","CL=F"];
+const TW_MAJOR_CODES=["^TWII","^TWOII"];
+
+function renderSimpleUSQuoteCard(q,label){
+  const m=q.main||{};
+  return `<div class="card">
+    <div class="symbol"><span>${label||q.symbol}</span><span>${q.symbol}</span></div>
+    <div class="session-line">目前：<span class="session-badge">${m.label||"--"}</span></div>
+    <div class="price">${fmt(m.price)}</div>
+    <div class="change">${changeHtml(m.change,m.pct)}</div>
+    <div class="segment-grid">
+      ${seg("盤前最後",q.segments?.pre)}
+      ${seg("日盤收盤",q.segments?.dayClose)}
+      ${seg("夜盤最後",q.segments?.nightClose)}
+    </div>
+    <div class="card-meta">Updated ${q.updatedAt?new Date(q.updatedAt).toLocaleTimeString():"--"}</div>
+  </div>`;
+}
+
+async function loadUSMajorIndex(){
+  const el=$("usMajorCards");
+  if(!el) return;
+  try{
+    const data=await api(`/api/session-quotes?symbols=${encodeURIComponent(US_MAJOR_SYMBOLS.join(","))}`);
+    el.innerHTML=(data.results||[]).map(x=>x.ok?renderSimpleUSQuoteCard(x.quote,x.quote.symbol):`<div class="card"><div class="symbol"><span>${x.symbol}</span><span>Error</span></div><div class="card-meta">${x.error}</div></div>`).join("");
+  }catch(e){
+    el.innerHTML=`<div class="card"><div class="symbol"><span>大盤指數讀取失敗</span></div><div class="card-meta">${e.message}</div></div>`;
+  }
+}
+
+async function loadMarketDashboard(){
+  try{
+    const data=await api(`/api/session-quotes?symbols=${encodeURIComponent(MARKET_SYMBOLS.join(","))}`);
+    const map={};
+    (data.results||[]).forEach(x=>{ if(x.ok) map[x.quote.symbol]=x.quote; });
+
+    const vix=map["^VIX"]?.main?.price;
+    const vixPct=map["^VIX"]?.main?.pct;
+    const btc=map["BTC-USD"]?.main?.price;
+    const btcPct=map["BTC-USD"]?.main?.pct;
+    const us10y=map["^TNX"]?.main?.price;
+
+    if($("vixValue")) $("vixValue").innerHTML=`${fmt(vix)} <span class="${cls(vixPct)}">${vixPct>0?"+":""}${fmt(vixPct)}%</span>`;
+    if($("btcValue")) $("btcValue").innerHTML=`${fmt(btc,0)} <span class="${cls(btcPct)}">${btcPct>0?"+":""}${fmt(btcPct)}%</span>`;
+    if($("bond10y")) $("bond10y").textContent=fmt(us10y);
+
+    let risk="🟡 Neutral";
+    let desc="VIX / BTC / 10Y 綜合判斷";
+    if(Number.isFinite(vix)){
+      if(vix<20 && (btcPct??0)>=0){risk="🔴 Risk ON";desc="VIX 偏低，風險資產偏強";}
+      else if(vix>25){risk="🟢 Risk OFF";desc="VIX 偏高，市場避險升溫";}
+    }
+    if($("usRisk")) $("usRisk").textContent=risk;
+    if($("usRiskDesc")) $("usRiskDesc").textContent=desc;
+  }catch(e){
+    if($("usRiskDesc")) $("usRiskDesc").textContent=`市場儀表板讀取失敗：${e.message}`;
+  }
+}
+
+function renderTWIndexFallback(){
+  const el=$("twMajorCards");
+  if(!el) return;
+  el.innerHTML=[
+    ["加權指數","^TWII"],
+    ["櫃買指數","^TWOII"],
+    ["電子指數","TWSE 電子"],
+    ["金融指數","TWSE 金融"],
+    ["台指期","TXF"]
+  ].map(x=>`<div class="card"><div class="symbol"><span>${x[0]}</span><span>${x[1]}</span></div><div class="price">--</div><div class="card-meta">下一版接入正式資料源</div></div>`).join("");
+}
+
+function renderTXFChart(){
+  const c=$("txfChart");
+  if(!c) return;
+  c.innerHTML="";
+  const id=`txf-${Date.now()}`;
+  const inner=document.createElement("div");
+  inner.id=id; inner.style.height="100%"; inner.style.width="100%";
+  c.appendChild(inner);
+  const script=document.createElement("script");
+  script.src="https://s3.tradingview.com/tv.js";
+  script.onload=()=>new TradingView.widget({
+    autosize:true,
+    symbol:"TAIFEX:TXF1!",
+    interval:"15",
+    timezone:"Asia/Taipei",
+    theme:"dark",
+    style:"1",
+    locale:"zh_TW",
+    toolbar_bg:"#0f172a",
+    enable_publishing:false,
+    allow_symbol_change:true,
+    hide_side_toolbar:false,
+    withdateranges:true,
+    details:true,
+    studies:["Volume@tv-basicstudies","RSI@tv-basicstudies","MACD@tv-basicstudies"],
+    container_id:id
+  });
+  c.appendChild(script);
+}
+
 async function refreshAll(){
   localStorage.setItem("apiBase",$("apiBase").value.trim());
   localStorage.setItem("usSymbols",$("usSymbols").value);
   localStorage.setItem("twSymbols",$("twSymbols").value);
   $("refreshStatus").textContent="Updating...";
   try{
-    // Watchlist and theme universe are separate.
-    // Theme clicks never modify these input fields.
-    await Promise.all([loadUSWatchlist(),loadTWWatchlist()]);
-    await loadThemeUniverses();
-    $("refreshStatus").textContent=`Auto updated ${new Date().toLocaleTimeString()} · 5s`;
+    await Promise.all([loadUSWatchlist(),loadTWWatchlist(),loadUSMajorIndex(),loadMarketDashboard()]);
+    renderTWIndexFallback();
+    const now=Date.now();
+    if(!window.__lastThemeLoad || now-window.__lastThemeLoad>60000){
+      window.__lastThemeLoad=now;
+      await loadThemeUniverses();
+    }
+    if(!window.__txfChartLoaded){
+      window.__txfChartLoaded=true;
+      renderTXFChart();
+    }
+    $("refreshStatus").textContent=`Auto updated ${new Date().toLocaleTimeString()} · 15s`;
   }catch(e){
     $("refreshStatus").textContent=`Error: ${e.message}`;
   }
 }
 
 init();
-
-
-// ===== V4.5 Phase1 Scaffold =====
-const MAJOR_US_INDEX=["SPY","VOO","QQQ","DIA","IWM","SOXX","SMH","VXX"];
-
-async function loadMajorIndexBoard(){
-  const el=document.getElementById("majorIndexBoard");
-  if(!el) return;
-  el.innerHTML=MAJOR_US_INDEX.map(x=>`<div class="card"><div class="symbol">${x}</div><div class="price">Loading...</div></div>`).join("");
-}
-const __oldInit = init;
-init = function(){
-  __oldInit();
-  loadMajorIndexBoard();
-}
