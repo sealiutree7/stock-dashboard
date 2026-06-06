@@ -24,7 +24,18 @@ const TW_NAMES={
 const $=id=>document.getElementById(id);let activeUS="NVDA",activeTW="2330",usStore={},twStore={},usThemeStore={},twThemeStore={};
 function apiBase(){return $("apiBase").value.trim().replace(/\/$/,"")}function list(id){return $(id).value.split(",").map(s=>s.trim().toUpperCase()).filter(Boolean)}function fmt(n,d=2){const x=Number(n);return Number.isFinite(x)?x.toFixed(d):"--"}function cls(v){return v>0?"up":v<0?"down":"flat"}function changeHtml(ch,pct){if(ch===null||ch===undefined||pct===null||pct===undefined)return `<span class="flat">--</span>`;const sign=ch>0?"+":"";return `<span class="${cls(ch)}">${sign}${fmt(ch)} (${sign}${fmt(pct)}%)</span>`}async function api(path){if(!apiBase())throw new Error("請先填 Cloudflare Worker API URL");const sep=path.includes("?")?"&":"?";const r=await fetch(`${apiBase()}${path}${sep}_=${Date.now()}`);const j=await r.json();if(!j.ok)throw new Error(j.error||"API error");return j.data}function uniq(a){return [...new Set(a)]}
 function init(){document.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));b.classList.add("active");document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));$(b.dataset.page).classList.add("active");});$("apiBase").value=localStorage.getItem("apiBase")||"";$("usSymbols").value=localStorage.getItem("usSymbols")||$("usSymbols").value;$("twSymbols").value=localStorage.getItem("twSymbols")||$("twSymbols").value;$("refreshBtn").onclick=refreshAll;themeMap("us",US_THEMES,[]);themeMap("tw",TW_THEMES,[]);chips("usChips",list("usSymbols"),"us");chips("twChips",list("twSymbols"),"tw");renderUSTV(activeUS);renderTWTV(activeTW);refreshAll();setInterval(refreshAll,5000);
-document.body.addEventListener("click",e=>{const rank=e.target.closest(".rank-pill");if(rank)switchTheme(rank.dataset.prefix,rank.dataset.symbols);const box=e.target.closest(".theme-box");if(box)switchTheme(box.dataset.prefix,box.dataset.symbols);});
+document.body.addEventListener("click",e=>{
+  const rank=e.target.closest(".rank-pill");
+  if(rank){
+    focusTheme(rank.dataset.prefix, rank.dataset.themeName, rank.dataset.symbols);
+    return;
+  }
+  const box=e.target.closest(".theme-box");
+  if(box){
+    switchTheme(box.dataset.prefix,box.dataset.symbols);
+    return;
+  }
+});
 }
 function chips(elId,symbols,type){$(elId).innerHTML=symbols.map(s=>`<button class="chip" data-type="${type}" data-symbol="${s}">${type==="tw"?(TW_NAMES[s]||s):s}</button>`).join("");document.querySelectorAll(`#${elId} .chip`).forEach(c=>c.onclick=()=>type==="us"?selectUS(c.dataset.symbol):selectTW(c.dataset.symbol))}
 function seg(title,obj){const val=obj?(obj.last??obj.price):null;return `<div class="seg"><div class="seg-title">${title}</div><div class="seg-val">${fmt(val)}</div></div>`}
@@ -33,9 +44,44 @@ function twCard(q){twStore[q.code]=q;const name=TW_NAMES[q.code]||q.name||q.code
 async function loadUS(){const syms=list("usSymbols");chips("usChips",syms,"us");const data=await api(`/api/session-quotes?symbols=${encodeURIComponent(syms.join(","))}`);$("session").textContent=data.session?.label||"Session";usStore={};$("usCards").innerHTML=(data.results||[]).map(x=>x.ok?usCard(x.quote.symbol,x.quote):`<div class="card"><div class="symbol"><span>${x.symbol}</span><span>Error</span></div><div class="card-meta">${x.error}</div></div>`).join("");document.querySelectorAll("#usCards .card[data-symbol]").forEach(c=>c.onclick=()=>selectUS(c.dataset.symbol));}
 async function loadTW(){const codes=list("twSymbols");chips("twChips",codes,"tw");const data=await api(`/api/tw-yahoo-quotes?codes=${encodeURIComponent(codes.join(","))}`);twStore={};$("twCards").innerHTML=Object.values(data||{}).map(q=>q.ok?twCard(q):`<div class="card"><div class="symbol"><span>${TW_NAMES[q.code]||q.code}</span><span>Error</span></div><div class="card-meta">${q.error||"no data"}</div></div>`).join("");document.querySelectorAll("#twCards .card[data-code]").forEach(c=>c.onclick=()=>selectTW(c.dataset.code,c.dataset.market));}
 async function loadThemeUniverses(){const usCodes=uniq(US_THEMES.flatMap(t=>t.symbols));const twCodes=uniq(TW_THEMES.flatMap(t=>t.symbols));const [usData,twData]=await Promise.all([api(`/api/session-quotes?symbols=${encodeURIComponent(usCodes.join(","))}`),api(`/api/tw-yahoo-quotes?codes=${encodeURIComponent(twCodes.join(","))}`)]);usThemeStore={};(usData.results||[]).forEach(x=>{if(x.ok)usThemeStore[x.quote.symbol]=x.quote});twThemeStore={};Object.values(twData||{}).forEach(q=>{if(q.ok)twThemeStore[q.code]=q});heat("us",US_THEMES,usThemeStore);heat("tw",TW_THEMES,twThemeStore);}
-function heat(prefix,themes,store){const vals=Object.values(store).map(q=>({symbol:q.symbol||q.code,name:prefix==="tw"?(TW_NAMES[q.code]||q.name||q.code):(q.symbol||q.code),price:q.main?.price??q.price,pct:q.main?.pct??q.changePercent})).filter(x=>Number.isFinite(Number(x.pct)));const up=vals.filter(x=>x.pct>0).length,total=vals.length,b=total?up/total*100:0;const top=[...vals].sort((a,b)=>b.pct-a.pct)[0];$(`${prefix}Breadth`).textContent=total?`${fmt(b,1)}%`:"--";$(`${prefix}MarketMode`).textContent=b>=70?"全面偏多":b>=50?"結構輪動":"資金保守";$(`${prefix}MarketModeDesc`).textContent=total?`上漲 ${up}/${total} 檔`:"--";if(top){$(`${prefix}TopStock`).textContent=top.name;$(`${prefix}TopStockDesc`).textContent=`${fmt(top.price)}｜${top.pct>0?"+":""}${fmt(top.pct)}%`;}const stats=themes.map(t=>{const p=t.symbols.map(s=>store[s]).filter(Boolean).map(q=>Number(q.main?.pct??q.changePercent)).filter(Number.isFinite);const avg=p.length?p.reduce((a,b)=>a+b,0)/p.length:null;const ups=p.filter(x=>x>0).length;return {...t,avg,ups,count:p.length,score:avg===null?-999:avg*1.6+(p.length?ups/p.length*100:0)*.025};}).filter(x=>x.count>0).sort((a,b)=>b.score-a.score);if(stats[0]){$(`${prefix}TopTheme`).textContent=stats[0].name;$(`${prefix}TopThemeDesc`).textContent=`平均 ${stats[0].avg>0?"+":""}${fmt(stats[0].avg)}%｜上漲 ${stats[0].ups}/${stats[0].count}`;}$(`${prefix}ThemeRank`).innerHTML=stats.map((s,i)=>`<div class="rank-pill ${i===0?"hot":i<=2?"warm":""}" data-prefix="${prefix}" data-symbols="${s.symbols.join(", ")}">#${i+1} <strong>${s.name}</strong><br>${s.avg>0?"+":""}${fmt(s.avg)}%｜${s.ups}/${s.count} 上漲</div>`).join("");themeMap(prefix,themes,stats);}
+function heat(prefix,themes,store){const vals=Object.values(store).map(q=>({symbol:q.symbol||q.code,name:prefix==="tw"?(TW_NAMES[q.code]||q.name||q.code):(q.symbol||q.code),price:q.main?.price??q.price,pct:q.main?.pct??q.changePercent})).filter(x=>Number.isFinite(Number(x.pct)));const up=vals.filter(x=>x.pct>0).length,total=vals.length,b=total?up/total*100:0;const top=[...vals].sort((a,b)=>b.pct-a.pct)[0];$(`${prefix}Breadth`).textContent=total?`${fmt(b,1)}%`:"--";$(`${prefix}MarketMode`).textContent=b>=70?"全面偏多":b>=50?"結構輪動":"資金保守";$(`${prefix}MarketModeDesc`).textContent=total?`上漲 ${up}/${total} 檔`:"--";if(top){$(`${prefix}TopStock`).textContent=top.name;$(`${prefix}TopStockDesc`).textContent=`${fmt(top.price)}｜${top.pct>0?"+":""}${fmt(top.pct)}%`;}const stats=themes.map(t=>{const p=t.symbols.map(s=>store[s]).filter(Boolean).map(q=>Number(q.main?.pct??q.changePercent)).filter(Number.isFinite);const avg=p.length?p.reduce((a,b)=>a+b,0)/p.length:null;const ups=p.filter(x=>x>0).length;return {...t,avg,ups,count:p.length,score:avg===null?-999:avg*1.6+(p.length?ups/p.length*100:0)*.025};}).filter(x=>x.count>0).sort((a,b)=>b.score-a.score);if(stats[0]){$(`${prefix}TopTheme`).textContent=stats[0].name;$(`${prefix}TopThemeDesc`).textContent=`平均 ${stats[0].avg>0?"+":""}${fmt(stats[0].avg)}%｜上漲 ${stats[0].ups}/${stats[0].count}`;}$(`${prefix}ThemeRank`).innerHTML=stats.map((s,i)=>`<div class="rank-pill ${i===0?"hot":i<=2?"warm":""}" data-prefix="${prefix}" data-theme-name="${s.name}" data-symbols="${s.symbols.join(", ")}">#${i+1} <strong>${s.name}</strong><br>${s.avg>0?"+":""}${fmt(s.avg)}%｜${s.ups}/${s.count} 上漲</div>`).join("");themeMap(prefix,themes,stats);}
+
+function focusTheme(prefix, themeName, symbols){
+  const themes = prefix==="us" ? US_THEMES : TW_THEMES;
+  const store = prefix==="us" ? usThemeStore : twThemeStore;
+  const theme = themes.find(t=>t.name===themeName);
+  if(!theme) return;
+
+  const qs = theme.symbols.map(s=>store[s]).filter(Boolean);
+  const pcts = qs.map(q=>Number(q.main?.pct ?? q.changePercent)).filter(Number.isFinite);
+  const avg = pcts.length ? pcts.reduce((a,b)=>a+b,0)/pcts.length : null;
+  const ups = pcts.filter(x=>x>0).length;
+
+  const top = qs.map(q=>({
+    symbol:q.symbol||q.code,
+    name:prefix==="tw"?(TW_NAMES[q.code]||q.name||q.code):(q.symbol||q.code),
+    price:q.main?.price??q.price,
+    pct:q.main?.pct??q.changePercent
+  })).filter(x=>Number.isFinite(Number(x.pct))).sort((a,b)=>b.pct-a.pct)[0];
+
+  $(`${prefix}TopTheme`).textContent = theme.name;
+  $(`${prefix}TopThemeDesc`).textContent = avg===null ? "這個題材目前沒有資料" : `平均 ${avg>0?"+":""}${fmt(avg)}%｜上漲 ${ups}/${pcts.length}`;
+
+  if(top){
+    $(`${prefix}TopStock`).textContent = top.name;
+    $(`${prefix}TopStockDesc`).textContent = `${fmt(top.price)}｜${top.pct>0?"+":""}${fmt(top.pct)}%`;
+  }
+
+  document.querySelectorAll(`#${prefix}ThemeRank .rank-pill`).forEach(x=>{
+    x.classList.toggle("selected", x.dataset.themeName===themeName);
+  });
+  document.querySelectorAll(`#${prefix}ThemeMap .theme-box`).forEach(x=>{
+    x.classList.toggle("selected", x.dataset.themeName===themeName);
+  });
+}
+
 function switchTheme(prefix,symbols){if(prefix==="us"){$("usSymbols").value=symbols;loadUS();}else{$("twSymbols").value=symbols;loadTW();}}
-function themeMap(prefix,themes,stats=[]){const sm=Object.fromEntries(stats.map(s=>[s.name,s]));$(`${prefix}ThemeMap`).innerHTML=themes.map(t=>{const st=sm[t.name];const pct=st&&st.avg!==null?`${st.avg>0?"+":""}${fmt(st.avg)}%`:"--";return `<div class="theme-box" data-prefix="${prefix}" data-symbols="${t.symbols.join(", ")}"><div class="theme-title">${t.name} <span class="${st?cls(st.avg):"flat"}">${pct}</span></div><div class="theme-desc">${t.desc}</div><div class="theme-tickers">${t.symbols.map(s=>`<span class="ticker-pill">${prefix==="tw"?(TW_NAMES[s]||s):s}</span>`).join("")}</div></div>`}).join("");}
+function themeMap(prefix,themes,stats=[]){const sm=Object.fromEntries(stats.map(s=>[s.name,s]));$(`${prefix}ThemeMap`).innerHTML=themes.map(t=>{const st=sm[t.name];const pct=st&&st.avg!==null?`${st.avg>0?"+":""}${fmt(st.avg)}%`:"--";return `<div class="theme-box" data-prefix="${prefix}" data-theme-name="${t.name}" data-symbols="${t.symbols.join(", ")}"><div class="theme-title">${t.name} <span class="${st?cls(st.avg):"flat"}">${pct}</span></div><div class="theme-desc">${t.desc}</div><div class="theme-tickers">${t.symbols.map(s=>`<span class="ticker-pill">${prefix==="tw"?(TW_NAMES[s]||s):s}</span>`).join("")}</div></div>`}).join("");}
 function renderWidget(containerId,titleId,symbol,titleText){$(titleId).textContent=titleText;const c=$(containerId);c.innerHTML="";const id=`tv-${containerId}-${Date.now()}`;const inner=document.createElement("div");inner.id=id;inner.style.height="100%";inner.style.width="100%";c.appendChild(inner);const script=document.createElement("script");script.src="https://s3.tradingview.com/tv.js";script.onload=()=>new TradingView.widget({autosize:true,symbol,interval:"D",timezone:"Asia/Taipei",theme:"dark",style:"1",locale:"zh_TW",toolbar_bg:"#0f172a",enable_publishing:false,allow_symbol_change:true,hide_side_toolbar:false,withdateranges:true,details:true,studies:["Volume@tv-basicstudies","RSI@tv-basicstudies","MACD@tv-basicstudies"],container_id:id});c.appendChild(script);}
 function renderUSTV(s){activeUS=s;renderWidget("usTvChart","usChartTitle",`NASDAQ:${s}`,`${s} TradingView Chart`)}
 function renderTWTV(code,market){activeTW=code;const m=market==="上櫃"?"TPEX":"TWSE";renderWidget("twTvChart","twChartTitle",`${m}:${code}`,`${code} ${TW_NAMES[code]||""} TradingView Chart`)}
