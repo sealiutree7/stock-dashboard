@@ -32,7 +32,7 @@ document.body.addEventListener("click",e=>{
   }
   const box=e.target.closest(".theme-box");
   if(box){
-    switchTheme(box.dataset.prefix,box.dataset.symbols);
+    focusTheme(box.dataset.prefix, box.dataset.themeName, box.dataset.symbols);
     return;
   }
 });
@@ -80,7 +80,7 @@ function focusTheme(prefix, themeName, symbols){
   });
 }
 
-function switchTheme(prefix,symbols){if(prefix==="us"){$("usSymbols").value=symbols;loadUS();}else{$("twSymbols").value=symbols;loadTW();}}
+function switchTheme(prefix,symbols){const themes=prefix==="us"?US_THEMES:TW_THEMES;const theme=themes.find(t=>t.symbols.join(", ")===symbols);if(theme)focusTheme(prefix,theme.name,symbols);}
 function themeMap(prefix,themes,stats=[]){const sm=Object.fromEntries(stats.map(s=>[s.name,s]));$(`${prefix}ThemeMap`).innerHTML=themes.map(t=>{const st=sm[t.name];const pct=st&&st.avg!==null?`${st.avg>0?"+":""}${fmt(st.avg)}%`:"--";return `<div class="theme-box" data-prefix="${prefix}" data-theme-name="${t.name}" data-symbols="${t.symbols.join(", ")}"><div class="theme-title">${t.name} <span class="${st?cls(st.avg):"flat"}">${pct}</span></div><div class="theme-desc">${t.desc}</div><div class="theme-tickers">${t.symbols.map(s=>`<span class="ticker-pill">${prefix==="tw"?(TW_NAMES[s]||s):s}</span>`).join("")}</div></div>`}).join("");}
 function renderWidget(containerId,titleId,symbol,titleText){$(titleId).textContent=titleText;const c=$(containerId);c.innerHTML="";const id=`tv-${containerId}-${Date.now()}`;const inner=document.createElement("div");inner.id=id;inner.style.height="100%";inner.style.width="100%";c.appendChild(inner);const script=document.createElement("script");script.src="https://s3.tradingview.com/tv.js";script.onload=()=>new TradingView.widget({autosize:true,symbol,interval:"D",timezone:"Asia/Taipei",theme:"dark",style:"1",locale:"zh_TW",toolbar_bg:"#0f172a",enable_publishing:false,allow_symbol_change:true,hide_side_toolbar:false,withdateranges:true,details:true,studies:["Volume@tv-basicstudies","RSI@tv-basicstudies","MACD@tv-basicstudies"],container_id:id});c.appendChild(script);}
 function renderUSTV(s){activeUS=s;renderWidget("usTvChart","usChartTitle",`NASDAQ:${s}`,`${s} TradingView Chart`)}
