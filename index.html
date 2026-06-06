@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>US AI Stock Terminal</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div>
+      <h1>US AI Stock Terminal</h1>
+      <p>GitHub Pages + Cloudflare Worker · Yahoo session data · TradingView chart</p>
+    </div>
+    <div class="right-status">
+      <div class="status-pill" id="session">Checking...</div>
+      <div class="refresh-status" id="refreshStatus">Ready</div>
+    </div>
+  </header>
+
+  <section class="panel controls">
+    <div class="field">
+      <label>Cloudflare Worker API URL</label>
+      <input id="apiBase" placeholder="例如：https://your-worker.yourname.workers.dev"/>
+    </div>
+    <div class="field">
+      <label>自選股，逗號分隔</label>
+      <input id="symbols" value="SATL, TSLA, NVDA, AVGO, AMD, SOXX, MU, INTC, TSM"/>
+    </div>
+    <button id="refreshBtn">更新</button>
+  </section>
+
+  <section class="panel logic">
+    <div class="logic-card"><strong>日盤</strong><span>主價：日盤即時 / 收盤｜參考：夜盤最後</span></div>
+    <div class="logic-card"><strong>夜盤</strong><span>主價：夜盤最後｜參考：日盤收盤</span></div>
+    <div class="logic-card"><strong>盤前</strong><span>主價：盤前最後｜參考：日盤收盤</span></div>
+  </section>
+
+  <section class="panel">
+    <div class="section-title">
+      <h2>Market Heat</h2>
+      <span>依 AI 供應鏈分組計算熱度</span>
+    </div>
+    <div class="summary-grid">
+      <div class="summary-card hot"><div class="summary-label">最熱產業</div><div class="summary-main" id="topSector">--</div><div class="summary-sub" id="topSectorDesc">等待更新</div></div>
+      <div class="summary-card"><div class="summary-label">最強個股</div><div class="summary-main" id="topStock">--</div><div class="summary-sub" id="topStockDesc">--</div></div>
+      <div class="summary-card"><div class="summary-label">上漲家數比例</div><div class="summary-main" id="breadth">--</div><div class="summary-sub">Watchlist breadth</div></div>
+      <div class="summary-card"><div class="summary-label">市場狀態</div><div class="summary-main" id="marketMode">--</div><div class="summary-sub" id="marketModeDesc">--</div></div>
+    </div>
+    <div id="sectorRank" class="rank-list"></div>
+  </section>
+
+  <section class="panel">
+    <div class="section-title">
+      <h2>AI Supply Chain Map</h2>
+      <span>點產業區塊可快速切換自選股</span>
+    </div>
+    <div id="supplyMap" class="supply-map"></div>
+  </section>
+
+  <section class="panel">
+    <div class="section-title">
+      <h2>Major Index</h2>
+      <span>SPY / QQQ / DIA / IWM / SOXX / VXX</span>
+    </div>
+    <div class="grid cards index-grid" id="indexCards"></div>
+  </section>
+
+  <section class="panel">
+    <div class="section-title">
+      <h2>Watchlist</h2>
+      <span>價格異動會閃動提示 · 每 5 秒自動更新</span>
+    </div>
+    <div class="chips" id="chips"></div>
+    <div class="grid cards watch-grid" id="stockCards"></div>
+  </section>
+
+  <section class="panel chart-panel">
+    <div class="section-title">
+      <div>
+        <h2 id="chartTitle">SATL TradingView Chart</h2>
+        <p class="hint">圖表由 TradingView 提供；報價卡由 Worker 代理 Yahoo session 資料。</p>
+      </div>
+      <div class="range-buttons">
+        <button class="mini active" data-interval="5">5m</button>
+        <button class="mini" data-interval="15">15m</button>
+        <button class="mini" data-interval="60">1h</button>
+        <button class="mini" data-interval="D">1D</button>
+      </div>
+    </div>
+    <div id="tvChart"></div>
+  </section>
+
+  <footer>
+    靜態前端可放 GitHub Pages；Yahoo Finance 由 Cloudflare Worker 代理。資料可能延遲，非投資建議。
+  </footer>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
