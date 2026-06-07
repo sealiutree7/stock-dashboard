@@ -32,6 +32,9 @@
     <button id="refreshBtn">更新全部</button>
   </section>
 
+
+  <main id="usPage" class="page active">
+
   <section class="panel">
     <div class="section-title">
       <h2>市場儀表板 Market Dashboard</h2>
@@ -44,12 +47,10 @@
       <div class="summary-card"><div class="summary-label">US10Y</div><div class="summary-main" id="bond10y">--</div><div class="summary-sub">美債10年期</div></div>
     </div>
   </section>
-
-  <main id="usPage" class="page active">
     <section class="panel">
       <div class="section-title">
         <h2>大盤指數</h2>
-        <span>SPY / VOO / QQQ / DIA / IWM / SOXX / SMH / VIX</span>
+        <span>SPY / VOO / QQQ / DIA / IWM / SOXX / SMH</span>
       </div>
       <div id="usIndexBoard" class="grid watch-grid"></div>
     </section>
@@ -67,6 +68,7 @@
         <div class="summary-card"><div class="summary-label">市場狀態</div><div class="summary-main" id="usMarketMode">--</div><div class="summary-sub" id="usMarketModeDesc">--</div></div>
       </div>
       <div id="usThemeRank" class="rank-list"></div>
+      <div id="usThemeFocusCards" class="grid cards watch-grid theme-focus"></div>
     </section>
 
     <section class="panel">
@@ -88,8 +90,10 @@
 
   <main id="twPage" class="page">
     <section class="panel">
-      <div class="section-title"><h2>台股大盤指數</h2><span>加權 / 櫃買 / 電子 / 金融 / 台指期</span></div>
+      <div class="section-title"><h2>台股大盤指數</h2><span>加權 / 櫃買 / 電子 / 台指期 TXF8</span></div>
       <div id="twIndexBoard" class="grid watch-grid"></div>
+      <div class="section-title sub-title"><h3 id="twIndexChartTitle">加權指數線圖</h3><span>點上方大盤卡片切換線圖</span></div>
+      <div id="twIndexChart" class="index-chart"></div>
     </section>
 
     <section class="panel chart-panel mini-chart">
@@ -113,9 +117,9 @@
     <section class="panel">
       <div class="section-title"><h2>景氣訊號燈</h2><span>國發會月資料，暫以可更新卡片呈現</span></div>
       <div class="summary-grid">
-        <div class="summary-card hot"><div class="summary-label">目前燈號</div><div class="summary-main" id="econLight">黃紅燈</div><div class="summary-sub">分數：31</div></div>
-        <div class="summary-card"><div class="summary-label">前期</div><div class="summary-main" id="econPrev">黃藍燈</div><div class="summary-sub">景氣回溫</div></div>
-        <div class="summary-card"><div class="summary-label">景氣位置</div><div class="summary-main" id="econPhase">復甦期</div><div class="summary-sub">留意過熱轉折</div></div>
+        <div class="summary-card hot"><div class="summary-label">目前燈號</div><div class="summary-main" id="econLight">紅燈</div><div class="summary-sub">2026年4月｜分數：39</div></div>
+        <div class="summary-card"><div class="summary-label">前期</div><div class="summary-main" id="econPrev">紅燈</div><div class="summary-sub">2026年3月｜分數：39</div></div>
+        <div class="summary-card"><div class="summary-label">景氣位置</div><div class="summary-main" id="econPhase">手動更新</div><div class="summary-sub">國發會月資料，下一版再接 API</div></div>
         <div class="summary-card"><div class="summary-label">台股解讀</div><div class="summary-main" id="econRead">中性偏多</div><div class="summary-sub">搭配台指期與資金流</div></div>
       </div>
     </section>
@@ -133,6 +137,7 @@
         <div class="summary-card"><div class="summary-label">市場狀態</div><div class="summary-main" id="twMarketMode">--</div><div class="summary-sub" id="twMarketModeDesc">--</div></div>
       </div>
       <div id="twThemeRank" class="rank-list"></div>
+      <div id="twThemeFocusCards" class="grid cards watch-grid theme-focus"></div>
     </section>
 
     <section class="panel">

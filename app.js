@@ -1,11 +1,10 @@
-const US_INDEX=["SPY","VOO","QQQ","DIA","IWM","SOXX","SMH","^VIX"];
+const US_INDEX=["SPY","VOO","QQQ","DIA","IWM","SOXX","SMH"];
 const DASH_SYMBOLS=["^VIX","BTC-USD","^TNX"];
 const TW_INDEX=[
-  {name:"加權指數",symbol:"^TWII"},
-  {name:"櫃買指數",symbol:"^TWOII"},
-  {name:"台積電權值",symbol:"2330.TW"},
-  {name:"金融類股",symbol:"2881.TW"},
-  {name:"台指期參考",symbol:"^TWII"}
+  {name:"加權指數",symbol:"^TWII",tv:"TWSE:TAIEX"},
+  {name:"櫃買指數",symbol:"^TWOII",tv:"TPEX:OTC"},
+  {name:"電子指數",symbol:"^TEII",tv:"TWSE:TE"},
+  {name:"台指期 TXF8",symbol:"TXF8",tv:"TAIFEX:TXF1!",isFuture:true}
 ];
 
 const US_THEMES=[
@@ -146,10 +145,22 @@ async function loadUSIndex(){
   $("usIndexBoard").innerHTML=US_INDEX.map(s=>cardQuote(s==="^VIX"?"VIX":s,map[s])).join("");
 }
 async function loadTWIndex(){
-  const syms=TW_INDEX.map(x=>x.symbol);
-  const data=await api(`/api/quotes?symbols=${encodeURIComponent(syms.join(","))}`);
+  const quoteSymbols=TW_INDEX.filter(x=>!x.isFuture).map(x=>x.symbol);
+  const data=await api(`/api/quotes?symbols=${encodeURIComponent(quoteSymbols.join(","))}`);
   const map={}; Object.values(data||{}).forEach(q=>map[q.symbol]=q);
-  $("twIndexBoard").innerHTML=TW_INDEX.map(x=>cardQuote(x.name,map[x.symbol])).join("");
+  $("twIndexBoard").innerHTML=TW_INDEX.map(x=>{
+    if(x.isFuture){
+      return `<div class="card" data-tv="${x.tv}" data-title="${x.name}線圖">
+        <div class="symbol"><span>${x.name}</span><span>TXF8</span></div>
+        <div class="session-line">來源：<span class="session-badge">TradingView</span></div>
+        <div class="price">請看下方線圖</div>
+        <div class="card-meta">台指期以 TAIFEX 連續合約圖表呈現，避免誤抓加權指數。</div>
+      </div>`;
+    }
+    return cardQuote(x.name,map[x.symbol]).replace('<div class="card">',`<div class="card" data-tv="${x.tv}" data-title="${x.name}線圖">`);
+  }).join("");
+  document.querySelectorAll("#twIndexBoard .card[data-tv]").forEach(c=>c.onclick=()=>renderTWIndexChart(c.dataset.tv,c.dataset.title));
+  if(!window.__twIndexChartLoaded){window.__twIndexChartLoaded=true;renderTWIndexChart("TWSE:TAIEX","加權指數線圖");}
 }
 
 function renderChips(elId,symbols,type){
@@ -223,6 +234,38 @@ function renderThemeMap(prefix,themes,stats=[]){
   const sm=Object.fromEntries(stats.map(s=>[s.name,s]));
   $(prefix+"ThemeMap").innerHTML=themes.slice(0,16).map(t=>{const st=sm[t.name];const pct=st&&st.avg!==null?`${st.avg>0?"+":""}${fmt(st.avg)}%`:"--";return `<div class="theme-box" data-prefix="${prefix}" data-theme-name="${t.name}"><div class="theme-title">${t.name} <span class="${st?colorClass(st.avg):"flat"}">${pct}</span></div><div class="theme-desc">${t.desc}</div><div class="theme-tickers">${t.symbols.slice(0,8).map(s=>`<span class="ticker-pill">${prefix==="tw"?(TW_NAMES[s]||s):s}</span>`).join("")}</div></div>`}).join("");
 }
+
+function renderThemeFocusCards(prefix,theme){
+  const store=prefix==="us"?usThemeStore:twThemeStore;
+  const el=$(prefix+"ThemeFocusCards");
+  if(!el||!theme)return;
+  const qs=theme.symbols.map(s=>store[s]).filter(Boolean);
+  if(!qs.length){
+    el.innerHTML=`<div class="card"><div class="symbol"><span>${theme.name}</span><span>No data</span></div><div class="card-meta">這個題材目前沒有可顯示報價。</div></div>`;
+    return;
+  }
+  el.innerHTML=qs.map(q=>{
+    if(prefix==="tw"){
+      const name=TW_NAMES[q.code]||q.name||q.code;
+      return `<div class="card" data-code="${q.code}" data-market="${q.market}">
+        <div class="symbol"><span>${name}</span><span>${q.code}</span></div>
+        <div class="price">${fmt(q.price)}</div>
+        <div class="change">${changeHtml(q.change,q.changePercent)}</div>
+        <div class="card-meta">Open ${fmt(q.open)} · Prev ${fmt(q.previousClose)}<br/>High ${fmt(q.high)} · Low ${fmt(q.low)}<br/>${q.time||""}</div>
+      </div>`;
+    }
+    const m=q.main||{};
+    return `<div class="card" data-symbol="${q.symbol}">
+      <div class="symbol"><span>${q.symbol}</span><span>${q.symbol}</span></div>
+      <div class="price">${fmt(m.price)}</div>
+      <div class="change">${changeHtml(m.change,m.pct)}</div>
+      <div class="card-meta">主價：${m.label||"--"}<br/>Updated ${q.updatedAt?new Date(q.updatedAt).toLocaleTimeString():"--"}</div>
+    </div>`;
+  }).join("");
+  document.querySelectorAll(`#${prefix}ThemeFocusCards .card[data-symbol]`).forEach(c=>c.onclick=()=>selectUS(c.dataset.symbol));
+  document.querySelectorAll(`#${prefix}ThemeFocusCards .card[data-code]`).forEach(c=>c.onclick=()=>selectTW(c.dataset.code,c.dataset.market));
+}
+
 function focusTheme(prefix,themeName){
   const themes=prefix==="us"?US_THEMES:TW_THEMES, store=prefix==="us"?usThemeStore:twThemeStore, theme=themes.find(t=>t.name===themeName); if(!theme)return;
   const qs=theme.symbols.map(s=>store[s]).filter(Boolean), pcts=qs.map(q=>Number(q.main?.pct??q.changePercent)).filter(Number.isFinite), avg=pcts.length?pcts.reduce((a,b)=>a+b,0)/pcts.length:null, ups=pcts.filter(x=>x>0).length;
@@ -231,8 +274,10 @@ function focusTheme(prefix,themeName){
   if(top){$(`${prefix}TopStock`).textContent=top.name;$(`${prefix}TopStockDesc`).textContent=`${fmt(top.price)}｜${top.pct>0?"+":""}${fmt(top.pct)}%`;}
   document.querySelectorAll(`#${prefix}ThemeRank .rank-pill`).forEach(x=>x.classList.toggle("selected",x.dataset.themeName===themeName));
   document.querySelectorAll(`#${prefix}ThemeMap .theme-box`).forEach(x=>x.classList.toggle("selected",x.dataset.themeName===themeName));
+  renderThemeFocusCards(prefix,theme);
 }
 
+function renderTWIndexChart(symbol,title){const t=$("twIndexChartTitle"); if(t)t.textContent=title||"台股大盤線圖"; renderWidget("twIndexChart",null,symbol,title||"台股大盤線圖");}
 function renderWidget(containerId,titleId,symbol,titleText){
   if(titleId)$(titleId).textContent=titleText;
   const c=$(containerId); if(!c)return; c.innerHTML="";
@@ -243,12 +288,12 @@ function renderWidget(containerId,titleId,symbol,titleText){
 }
 function renderUSTV(s){activeUS=s;renderWidget("usTvChart","usChartTitle",`NASDAQ:${s}`,`${s} TradingView Chart`)}
 function renderTWTV(code,market){activeTW=code;const m=market==="上櫃"?"TPEX":"TWSE";renderWidget("twTvChart","twChartTitle",`${m}:${code}`,`${code} ${TW_NAMES[code]||""} TradingView Chart`)}
-function renderTXFChart(){renderWidget("txfChart",null,"TAIFEX:TXF1!","")}
+function renderTXFChart(){renderWidget("txfChart",null,"TAIFEX:TXF1!","台指期 TXF8 即時圖")}
 function selectUS(s){renderUSTV(s)} function selectTW(code,market){renderTWTV(code,market||twStore[code]?.market)}
 function updateWaveAnalysis(){
-  const base=Number((Object.values(twStore)[0]||{}).price)||23000;
-  $("waveSupport").textContent=`${Math.round(base*0.97)} / ${Math.round(base*0.95)}`;
-  $("waveResistance").textContent=`${Math.round(base*1.02)} / ${Math.round(base*1.04)}`;
-  $("waveTarget").textContent=`${Math.round(base*1.06)}`;
+  $("waveStage").textContent="台指期 TXF8：第3浪/反彈浪觀察";
+  $("waveSupport").textContent="請看TXF線圖";
+  $("waveResistance").textContent="請看TXF線圖";
+  $("waveTarget").textContent="待接TXF歷史K";
 }
 init();
