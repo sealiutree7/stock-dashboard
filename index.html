@@ -1,65 +1,159 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-<meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Stock Terminal US / TW</title><link rel="stylesheet" href="style.css"/>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Anjou Terminal v4.5</title>
+  <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
 <div class="app">
-<header class="topbar"><div><h1>Stock Terminal</h1><p>US / TW market dashboard · Cloudflare Worker · Yahoo session data</p></div><div class="right-status"><div class="status-pill" id="session">Checking...</div><div class="refresh-status" id="refreshStatus">Ready</div></div></header>
-<nav class="tabs"><button class="tab active" data-page="usPage">美股頁面</button><button class="tab" data-page="twPage">台股頁面</button></nav>
-<section class="panel controls"><div class="field"><label>Cloudflare Worker API URL</label><input id="apiBase" placeholder="例如：https://stock-session-worker.xxx.workers.dev"/></div><button id="refreshBtn">更新全部</button></section>
+  <header class="topbar">
+    <div>
+      <h1>Anjou Terminal v4.5</h1>
+      <p>US / TW market dashboard · Cloudflare Worker · Professional terminal</p>
+    </div>
+    <div class="right-status">
+      <div class="status-pill" id="session">Checking...</div>
+      <div class="refresh-status" id="refreshStatus">Ready</div>
+    </div>
+  </header>
 
-<main id="usPage" class="page active">
-<section class="panel">
-  <div class="section-title"><h2>市場儀表板 Market Dashboard</h2><span>Risk On / Risk Off Monitor</span></div>
-  <div class="summary-grid" id="marketDashboardCards">
-    <div class="summary-card"><div class="summary-label">美股情緒</div><div class="summary-main" id="usRisk">--</div><div class="summary-sub" id="usRiskDesc">等待更新</div></div>
-    <div class="summary-card"><div class="summary-label">VIX</div><div class="summary-main" id="vixValue">--</div><div class="summary-sub">恐慌指數</div></div>
-    <div class="summary-card"><div class="summary-label">BTC</div><div class="summary-main" id="btcValue">--</div><div class="summary-sub">風險資產</div></div>
-    <div class="summary-card"><div class="summary-label">US10Y</div><div class="summary-main" id="bond10y">--</div><div class="summary-sub">美債10年期</div></div>
-  </div>
-</section>
+  <nav class="tabs">
+    <button class="tab active" data-page="usPage">美股頁面</button>
+    <button class="tab" data-page="twPage">台股頁面</button>
+  </nav>
 
-<section class="panel">
-  <div class="section-title"><h2>大盤指數</h2><span>SPY / VOO / QQQ / DIA / IWM / SOXX / SMH / VXX</span></div>
-  <div class="grid cards watch-grid" id="usMajorCards"></div>
-</section>
+  <section class="panel controls">
+    <div class="field">
+      <label>Cloudflare Worker API URL</label>
+      <input id="apiBase" placeholder="例如：https://stock-session-worker.xxx.workers.dev"/>
+    </div>
+    <button id="refreshBtn">更新全部</button>
+  </section>
 
-<section class="panel controls compact"><div class="field"><label>美股自選，逗號分隔</label><input id="usSymbols" value="NVDA, AMD, AVGO, TSLA, SOXX, MU, INTC, TSM, PLTR, ARM, SMCI, QQQ, SPY"/></div></section>
-<section class="panel"><div class="section-title"><h2>美股題材熱度</h2><span>點排行或地圖只聚焦題材，不更動自選清單</span></div><div class="summary-grid"><div class="summary-card hot"><div class="summary-label">最熱題材</div><div class="summary-main" id="usTopTheme">--</div><div class="summary-sub" id="usTopThemeDesc">等待更新</div></div><div class="summary-card"><div class="summary-label">最強個股</div><div class="summary-main" id="usTopStock">--</div><div class="summary-sub" id="usTopStockDesc">--</div></div><div class="summary-card"><div class="summary-label">上漲家數比例</div><div class="summary-main" id="usBreadth">--</div><div class="summary-sub">Theme universe breadth</div></div><div class="summary-card"><div class="summary-label">市場狀態</div><div class="summary-main" id="usMarketMode">--</div><div class="summary-sub" id="usMarketModeDesc">--</div></div></div><div id="usThemeRank" class="rank-list"></div></section>
-<section class="panel"><div class="section-title"><h2>美股題材地圖</h2><span>點題材只聚焦熱度，不改自選清單</span></div><div id="usThemeMap" class="theme-map"></div></section>
-<section class="panel"><div class="section-title"><h2>美股自選清單</h2><span>點卡片切換下方 TradingView</span></div><div class="chips" id="usChips"></div><div class="grid cards watch-grid" id="usCards"></div></section>
-<section class="panel chart-panel"><div class="section-title"><div><h2 id="usChartTitle">NVDA TradingView Chart</h2><p class="hint">美股圖表：Volume / RSI / MACD。</p></div></div><div id="usTvChart"></div></section>
-</main>
+  <section class="panel">
+    <div class="section-title">
+      <h2>市場儀表板 Market Dashboard</h2>
+      <span>報價 5 秒更新，題材 5 分鐘更新</span>
+    </div>
+    <div class="summary-grid">
+      <div class="summary-card hot"><div class="summary-label">美股情緒</div><div class="summary-main" id="usRisk">--</div><div class="summary-sub" id="usRiskDesc">等待更新</div></div>
+      <div class="summary-card"><div class="summary-label">VIX</div><div class="summary-main" id="vixValue">--</div><div class="summary-sub">恐慌指數</div></div>
+      <div class="summary-card"><div class="summary-label">BTC</div><div class="summary-main" id="btcValue">--</div><div class="summary-sub">風險資產</div></div>
+      <div class="summary-card"><div class="summary-label">US10Y</div><div class="summary-main" id="bond10y">--</div><div class="summary-sub">美債10年期</div></div>
+    </div>
+  </section>
 
-<main id="twPage" class="page">
-<section class="panel">
-  <div class="section-title"><h2>大盤指數</h2><span>加權指數 / 櫃買指數 / 電子指數 / 金融指數 / 台指期</span></div>
-  <div class="grid cards watch-grid" id="twMajorCards"></div>
-</section>
+  <main id="usPage" class="page active">
+    <section class="panel">
+      <div class="section-title">
+        <h2>大盤指數</h2>
+        <span>SPY / VOO / QQQ / DIA / IWM / SOXX / SMH / VIX</span>
+      </div>
+      <div id="usIndexBoard" class="grid watch-grid"></div>
+    </section>
 
-<section class="panel chart-panel">
-  <div class="section-title"><div><h2>台指期即時圖</h2><p class="hint">獨立台指期圖表，不影響下方個股圖。</p></div></div>
-  <div id="txfChart"></div>
-</section>
+    <section class="panel controls compact">
+      <div class="field"><label>美股自選，逗號分隔</label><input id="usSymbols" value="MU, NVDA, INTC, SATL, AVGO"/></div>
+    </section>
 
-<section class="panel">
-  <div class="section-title"><h2>景氣訊號燈</h2><span>目前先用固定展示資料，下一版接國發會資料</span></div>
-  <div class="summary-grid">
-    <div class="summary-card hot"><div class="summary-label">目前燈號</div><div class="summary-main">黃紅燈</div><div class="summary-sub">景氣偏熱 / 復甦延續</div></div>
-    <div class="summary-card"><div class="summary-label">分數</div><div class="summary-main">31</div><div class="summary-sub">示意值</div></div>
-    <div class="summary-card"><div class="summary-label">前期</div><div class="summary-main">黃藍燈</div><div class="summary-sub">示意值</div></div>
-    <div class="summary-card"><div class="summary-label">判讀</div><div class="summary-main">復甦期</div><div class="summary-sub">仍需搭配指數與資金流</div></div>
-  </div>
-</section>
+    <section class="panel">
+      <div class="section-title"><h2>美股題材熱度 TOP10</h2><span>點排行或地圖只聚焦題材，不更動自選清單</span></div>
+      <div class="summary-grid">
+        <div class="summary-card hot"><div class="summary-label">最熱題材</div><div class="summary-main" id="usTopTheme">--</div><div class="summary-sub" id="usTopThemeDesc">等待更新</div></div>
+        <div class="summary-card"><div class="summary-label">最強個股</div><div class="summary-main" id="usTopStock">--</div><div class="summary-sub" id="usTopStockDesc">--</div></div>
+        <div class="summary-card"><div class="summary-label">上漲家數比例</div><div class="summary-main" id="usBreadth">--</div><div class="summary-sub">Theme universe breadth</div></div>
+        <div class="summary-card"><div class="summary-label">市場狀態</div><div class="summary-main" id="usMarketMode">--</div><div class="summary-sub" id="usMarketModeDesc">--</div></div>
+      </div>
+      <div id="usThemeRank" class="rank-list"></div>
+    </section>
 
-<section class="panel controls compact"><div class="field"><label>台股自選，逗號分隔</label><input id="twSymbols" value="2330, 2454, 2308, 2317, 3443, 3661, 2379, 3034, 6669, 4763, 3450, 6531"/></div></section>
-<section class="panel"><div class="section-title"><h2>台股題材熱度</h2><span>點排行或地圖只聚焦題材，不更動自選清單</span></div><div class="summary-grid"><div class="summary-card hot"><div class="summary-label">最熱題材</div><div class="summary-main" id="twTopTheme">--</div><div class="summary-sub" id="twTopThemeDesc">等待更新</div></div><div class="summary-card"><div class="summary-label">最強個股</div><div class="summary-main" id="twTopStock">--</div><div class="summary-sub" id="twTopStockDesc">--</div></div><div class="summary-card"><div class="summary-label">上漲家數比例</div><div class="summary-main" id="twBreadth">--</div><div class="summary-sub">Theme universe breadth</div></div><div class="summary-card"><div class="summary-label">市場狀態</div><div class="summary-main" id="twMarketMode">--</div><div class="summary-sub" id="twMarketModeDesc">--</div></div></div><div id="twThemeRank" class="rank-list"></div></section>
-<section class="panel"><div class="section-title"><h2>台股題材地圖</h2><span>點題材只聚焦熱度，不改自選清單</span></div><div id="twThemeMap" class="theme-map"></div></section>
-<section class="panel"><div class="section-title"><h2>台股自選清單</h2><span>點卡片切換下方 TradingView 台股圖表</span></div><div class="chips" id="twChips"></div><div class="grid cards watch-grid" id="twCards"></div></section>
-<section class="panel chart-panel"><div class="section-title"><div><h2 id="twChartTitle">2330 台積電 TradingView Chart</h2><p class="hint">台股圖表：上市 TWSE，上櫃 TPEX。</p></div></div><div id="twTvChart"></div></section>
-</main>
-<footer>資料可能延遲，非投資建議。美股與台股皆透過 Worker 代理 Yahoo Finance。</footer>
-</div><script src="app.js"></script>
-</body></html>
+    <section class="panel">
+      <div class="section-title"><h2>美股題材地圖</h2><span>點擊只聚焦題材，不改自選清單</span></div>
+      <div id="usThemeMap" class="theme-map"></div>
+    </section>
+
+    <section class="panel">
+      <div class="section-title"><h2>美股自選清單</h2><span>只根據輸入框內容顯示</span></div>
+      <div class="chips" id="usChips"></div>
+      <div class="grid cards watch-grid" id="usCards"></div>
+    </section>
+
+    <section class="panel chart-panel">
+      <div class="section-title"><div><h2 id="usChartTitle">NVDA TradingView Chart</h2><p class="hint">點美股卡片切換圖表。</p></div></div>
+      <div id="usTvChart"></div>
+    </section>
+  </main>
+
+  <main id="twPage" class="page">
+    <section class="panel">
+      <div class="section-title"><h2>台股大盤指數</h2><span>加權 / 櫃買 / 電子 / 金融 / 台指期</span></div>
+      <div id="twIndexBoard" class="grid watch-grid"></div>
+    </section>
+
+    <section class="panel chart-panel mini-chart">
+      <div class="section-title"><div><h2>台指期即時圖</h2><p class="hint">獨立線圖，不與下方個股圖混用。</p></div></div>
+      <div id="txfChart"></div>
+    </section>
+
+    <section class="panel">
+      <div class="section-title"><h2>台指期波浪分析</h2><span>ZigZag / RSI / 型態推估，僅供參考</span></div>
+      <div class="wave-grid">
+        <div class="summary-card hot"><div class="summary-label">目前判定</div><div class="summary-main" id="waveStage">第3浪嘗試中</div><div class="summary-sub">偏多延伸，但需守支撐</div></div>
+        <div class="summary-card"><div class="summary-label">支撐區</div><div class="summary-main" id="waveSupport">--</div><div class="summary-sub">跌破則浪型轉弱</div></div>
+        <div class="summary-card"><div class="summary-label">壓力區</div><div class="summary-main" id="waveResistance">--</div><div class="summary-sub">站上確認續強</div></div>
+        <div class="summary-card"><div class="summary-label">延伸目標</div><div class="summary-main" id="waveTarget">--</div><div class="summary-sub">依近期波段估算</div></div>
+      </div>
+      <div class="wave-line" id="waveLine">
+        <span>①</span><span>②</span><span class="active-wave">③ 現在</span><span>④</span><span>⑤</span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="section-title"><h2>景氣訊號燈</h2><span>國發會月資料，暫以可更新卡片呈現</span></div>
+      <div class="summary-grid">
+        <div class="summary-card hot"><div class="summary-label">目前燈號</div><div class="summary-main" id="econLight">黃紅燈</div><div class="summary-sub">分數：31</div></div>
+        <div class="summary-card"><div class="summary-label">前期</div><div class="summary-main" id="econPrev">黃藍燈</div><div class="summary-sub">景氣回溫</div></div>
+        <div class="summary-card"><div class="summary-label">景氣位置</div><div class="summary-main" id="econPhase">復甦期</div><div class="summary-sub">留意過熱轉折</div></div>
+        <div class="summary-card"><div class="summary-label">台股解讀</div><div class="summary-main" id="econRead">中性偏多</div><div class="summary-sub">搭配台指期與資金流</div></div>
+      </div>
+    </section>
+
+    <section class="panel controls compact">
+      <div class="field"><label>台股自選，逗號分隔</label><input id="twSymbols" value="2330,2454,3034,2379,3443,3661"/></div>
+    </section>
+
+    <section class="panel">
+      <div class="section-title"><h2>台股題材熱度 TOP10</h2><span>點排行或地圖只聚焦題材，不更動自選清單</span></div>
+      <div class="summary-grid">
+        <div class="summary-card hot"><div class="summary-label">最熱題材</div><div class="summary-main" id="twTopTheme">--</div><div class="summary-sub" id="twTopThemeDesc">等待更新</div></div>
+        <div class="summary-card"><div class="summary-label">最強個股</div><div class="summary-main" id="twTopStock">--</div><div class="summary-sub" id="twTopStockDesc">--</div></div>
+        <div class="summary-card"><div class="summary-label">上漲家數比例</div><div class="summary-main" id="twBreadth">--</div><div class="summary-sub">Theme universe breadth</div></div>
+        <div class="summary-card"><div class="summary-label">市場狀態</div><div class="summary-main" id="twMarketMode">--</div><div class="summary-sub" id="twMarketModeDesc">--</div></div>
+      </div>
+      <div id="twThemeRank" class="rank-list"></div>
+    </section>
+
+    <section class="panel">
+      <div class="section-title"><h2>台股題材地圖</h2><span>內部追蹤完整題材，畫面顯示重點</span></div>
+      <div id="twThemeMap" class="theme-map"></div>
+    </section>
+
+    <section class="panel">
+      <div class="section-title"><h2>台股自選清單</h2><span>只根據輸入框內容顯示</span></div>
+      <div class="chips" id="twChips"></div>
+      <div class="grid cards watch-grid" id="twCards"></div>
+    </section>
+
+    <section class="panel chart-panel">
+      <div class="section-title"><div><h2 id="twChartTitle">2330 台積電 TradingView Chart</h2><p class="hint">點台股卡片切換圖表。</p></div></div>
+      <div id="twTvChart"></div>
+    </section>
+  </main>
+
+  <footer>資料可能延遲，非投資建議。紅色＝漲/資金流入，綠色＝跌/資金流出。</footer>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
