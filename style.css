@@ -38,3 +38,6 @@ footer{text-align:center;padding:8px;color:var(--muted)}
 .sub-title h3{margin:0;font-size:20px}
 .index-chart{width:100%;height:360px;border-radius:14px;overflow:hidden;border:1px solid rgba(0,183,255,.25);background:#0f172a;margin-top:10px}
 .theme-focus{margin-top:14px;padding-top:12px;border-top:1px solid rgba(0,183,255,.16)}
+
+/* Phase 1.5 fixes */
+.theme-focus .card{min-height:150px}
