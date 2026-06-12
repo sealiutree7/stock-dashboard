@@ -150,7 +150,7 @@ async function loadTWIndex(){
   const map={}; Object.values(data||{}).forEach(q=>map[q.symbol]=q);
   $("twIndexBoard").innerHTML=TW_INDEX.map(x=>{
     const card=cardQuote(x.name,map[x.symbol]);
-    if(x.tv){ return card.replace('<div class="card">',`<div class="card" data-tv="${x.tv}" data-title="${x.name}線圖">`); }
+    if(x.tv){return card.replace('<div class="card">',`<div class="card" data-tv="${x.tv}" data-title="${x.name}線圖">`);}
     return card;
   }).join("");
   document.querySelectorAll("#twIndexBoard .card[data-tv]").forEach(c=>c.onclick=()=>renderTWIndexChart(c.dataset.tv,c.dataset.title));
@@ -234,7 +234,7 @@ function renderThemeFocusCards(prefix,theme){
   const store=prefix==="us"?usThemeStore:twThemeStore;
   const el=$(prefix+"ThemeFocusCards");
   if(!el||!theme)return;
-  const cards=theme.symbols.map(sym=>{
+  el.innerHTML=theme.symbols.map(sym=>{
     const q=store[sym];
     if(prefix==="tw"){
       const name=TW_NAMES[sym]||sym;
@@ -248,14 +248,8 @@ function renderThemeFocusCards(prefix,theme){
     }
     if(!q){return `<div class="card"><div class="symbol"><span>${sym}</span><span>No data</span></div><div class="card-meta">目前沒有報價資料。</div></div>`;}
     const m=q.main||{};
-    return `<div class="card" data-symbol="${q.symbol}">
-      <div class="symbol"><span>${q.symbol}</span><span>${q.symbol}</span></div>
-      <div class="price">${fmt(m.price)}</div>
-      <div class="change">${changeHtml(m.change,m.pct)}</div>
-      <div class="card-meta">主價：${m.label||"--"}<br/>Updated ${q.updatedAt?new Date(q.updatedAt).toLocaleTimeString():"--"}</div>
-    </div>`;
-  });
-  el.innerHTML=cards.join("");
+    return `<div class="card" data-symbol="${q.symbol}"><div class="symbol"><span>${q.symbol}</span><span>${q.symbol}</span></div><div class="price">${fmt(m.price)}</div><div class="change">${changeHtml(m.change,m.pct)}</div><div class="card-meta">主價：${m.label||"--"}<br/>Updated ${q.updatedAt?new Date(q.updatedAt).toLocaleTimeString():"--"}</div></div>`;
+  }).join("");
   document.querySelectorAll(`#${prefix}ThemeFocusCards .card[data-symbol]`).forEach(c=>c.onclick=()=>selectUS(c.dataset.symbol));
   document.querySelectorAll(`#${prefix}ThemeFocusCards .card[data-code]`).forEach(c=>c.onclick=()=>selectTW(c.dataset.code,c.dataset.market));
 }
@@ -285,7 +279,7 @@ function renderTWTV(code,market){activeTW=code;const m=market==="上櫃"?"TPEX":
 
 function selectUS(s){renderUSTV(s)} function selectTW(code,market){renderTWTV(code,market||twStore[code]?.market)}
 function updateWaveAnalysis(refQuote){
-  const px = Number(refQuote?.price);
+  const px=Number(refQuote?.price);
   if(!Number.isFinite(px)){
     $("waveStage").textContent="台指期 TXF8：資料等待中";
     $("waveSupport").textContent="待取得報價";
@@ -293,10 +287,10 @@ function updateWaveAnalysis(refQuote){
     $("waveTarget").textContent="待取得報價";
     return;
   }
-  const round50 = v => Math.round(v/50)*50;
-  const s1=round50(px*0.985), s2=round50(px*0.970), s3=round50(px*0.950);
-  const r1=round50(px*1.015), r2=round50(px*1.030), r3=round50(px*1.050);
-  const t1=round50(px*1.045), t2=round50(px*1.065), t3=round50(px*1.085);
+  const r50=v=>Math.round(v/50)*50;
+  const s1=r50(px*0.985),s2=r50(px*0.970),s3=r50(px*0.950);
+  const r1=r50(px*1.015),r2=r50(px*1.030),r3=r50(px*1.050);
+  const t1=r50(px*1.045),t2=r50(px*1.065),t3=r50(px*1.085);
   $("waveStage").textContent="第3浪延伸 / B浪反彈二擇一";
   $("waveSupport").textContent=`${s1} / ${s2} / ${s3}`;
   $("waveResistance").textContent=`${r1} / ${r2} / ${r3}`;
