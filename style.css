@@ -46,3 +46,5 @@ footer{text-align:center;padding:8px;color:var(--muted)}
 .tv-mini-card{height:112px;margin-top:10px;border-radius:12px;overflow:hidden;border:1px solid rgba(0,183,255,.18);background:#020617}
 
 .manual-market-inputs{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:14px}.manual-card-note{color:var(--muted);font-size:12px;line-height:1.5;margin-top:10px}@media(max-width:620px){.manual-market-inputs{grid-template-columns:1fr}}
+
+.data-source-note{color:var(--muted);font-size:11px;line-height:1.5;margin-top:8px}
