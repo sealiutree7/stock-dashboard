@@ -1,11 +1,11 @@
 const US_INDEX=["SPY","VOO","QQQ","DIA","IWM","SOXX","SMH"];
 const DASH_SYMBOLS=["^VIX","BTC-USD","^TNX"];
 const TW_INDEX=[
-  {name:"加權指數",symbol:"^TWII",tv:"TWSE:TAIEX"},
-  {name:"櫃買指數",symbol:"^TWOII",tv:"TPEX:OTC"},
-  {name:"電子指數",symbol:"^TEII",tv:"TWSE:TE"},
-  {name:"台指期 TXF8",symbol:"TXF8",tv:null,isFuture:true},
-  {name:"VIXTWN",symbol:"VIXTWN",tv:null,isVol:true}
+  {name:"加權指數",symbol:"^TWII",kind:"api"},
+  {name:"櫃買指數",symbol:"^TWOII",kind:"api"},
+  {name:"電子指數",symbol:"^TEII",kind:"api"},
+  {name:"台指期 TXF8",symbol:"TXF8",kind:"tv",tv:"TAIFEX:TXF1!"},
+  {name:"VIXTWN",symbol:"VIXTWN",kind:"tv",tv:"TWSE:VIXTWN"}
 ];
 
 const US_THEMES=[
@@ -93,6 +93,7 @@ function init(){
   renderChips("twChips",list("twSymbols"),"tw");
   renderUSTV(activeUS);
   renderTWTV(activeTW);
+  setTimeout(()=>{const x=document.getElementById("txfManual"); if(x)x.addEventListener("input",updateWaveAnalysis);},200);
   
 
   refreshAll(true);
@@ -145,17 +146,17 @@ async function loadUSIndex(){
   $("usIndexBoard").innerHTML=US_INDEX.map(s=>cardQuote(s==="^VIX"?"VIX":s,map[s])).join("");
 }
 async function loadTWIndex(){
-  const quoteSymbols=TW_INDEX.map(x=>x.symbol);
-  const data=await api(`/api/quotes?symbols=${encodeURIComponent(quoteSymbols.join(","))}`);
+  const apiItems=TW_INDEX.filter(x=>x.kind==="api");
+  const data=await api(`/api/quotes?symbols=${encodeURIComponent(apiItems.map(x=>x.symbol).join(","))}`);
   const map={}; Object.values(data||{}).forEach(q=>map[q.symbol]=q);
   $("twIndexBoard").innerHTML=TW_INDEX.map(x=>{
-    const card=cardQuote(x.name,map[x.symbol]);
-    if(x.tv){return card.replace('<div class="card">',`<div class="card" data-tv="${x.tv}" data-title="${x.name}線圖">`);}
-    return card;
+    if(x.kind==="tv"){
+      return `<div class="card"><div class="symbol"><span>${x.name}</span><span>${x.symbol}</span></div><div class="session-line">來源：<span class="session-badge">TradingView 報價</span></div><div id="mini-${x.symbol}" class="tv-mini-card"></div><div class="card-meta">若 TradingView 沒顯示，代表該商品不支援內嵌即時報價。</div></div>`;
+    }
+    return cardQuote(x.name,map[x.symbol]);
   }).join("");
-  document.querySelectorAll("#twIndexBoard .card[data-tv]").forEach(c=>c.onclick=()=>renderTWIndexChart(c.dataset.tv,c.dataset.title));
-  if(!window.__twIndexChartLoaded){window.__twIndexChartLoaded=true;renderTWIndexChart("TWSE:TAIEX","加權指數線圖");}
-  updateWaveAnalysis(map["TXF8"] || map["^TWII"]);
+  setTimeout(()=>{renderMiniQuote("mini-TXF8","TAIFEX:TXF1!"); renderMiniQuote("mini-VIXTWN","TWSE:VIXTWN");},100);
+  updateWaveAnalysis();
 }
 
 function renderChips(elId,symbols,type){
@@ -265,7 +266,14 @@ function focusTheme(prefix,themeName){
   renderThemeFocusCards(prefix,theme);
 }
 
-function renderTWIndexChart(symbol,title){const t=$("twIndexChartTitle"); if(t)t.textContent=title||"台股大盤線圖"; renderWidget("twIndexChart",null,symbol,title||"台股大盤線圖");}
+
+function renderMiniQuote(containerId,symbol){
+  const c=document.getElementById(containerId); if(!c)return; c.innerHTML="";
+  const box=document.createElement("div"); box.className="tradingview-widget-container__widget"; c.appendChild(box);
+  const s=document.createElement("script"); s.type="text/javascript"; s.src="https://s3.tradingview.com/external-embedding/embed-widget-single-quote.js"; s.async=true;
+  s.innerHTML=JSON.stringify({symbol:symbol,width:"100%",isTransparent:true,colorTheme:"dark",locale:"zh_TW"}); c.appendChild(s);
+}
+
 function renderWidget(containerId,titleId,symbol,titleText){
   if(titleId)$(titleId).textContent=titleText;
   const c=$(containerId); if(!c)return; c.innerHTML="";
@@ -278,22 +286,11 @@ function renderUSTV(s){activeUS=s;renderWidget("usTvChart","usChartTitle",`NASDA
 function renderTWTV(code,market){activeTW=code;const m=market==="上櫃"?"TPEX":"TWSE";renderWidget("twTvChart","twChartTitle",`${m}:${code}`,`${code} ${TW_NAMES[code]||""} TradingView Chart`)}
 
 function selectUS(s){renderUSTV(s)} function selectTW(code,market){renderTWTV(code,market||twStore[code]?.market)}
-function updateWaveAnalysis(refQuote){
-  const px=Number(refQuote?.price);
-  if(!Number.isFinite(px)){
-    $("waveStage").textContent="台指期 TXF8：資料等待中";
-    $("waveSupport").textContent="待取得報價";
-    $("waveResistance").textContent="待取得報價";
-    $("waveTarget").textContent="待取得報價";
-    return;
-  }
-  const r50=v=>Math.round(v/50)*50;
-  const s1=r50(px*0.985),s2=r50(px*0.970),s3=r50(px*0.950);
-  const r1=r50(px*1.015),r2=r50(px*1.030),r3=r50(px*1.050);
-  const t1=r50(px*1.045),t2=r50(px*1.065),t3=r50(px*1.085);
-  $("waveStage").textContent="第3浪延伸 / B浪反彈二擇一";
-  $("waveSupport").textContent=`${s1} / ${s2} / ${s3}`;
-  $("waveResistance").textContent=`${r1} / ${r2} / ${r3}`;
-  $("waveTarget").textContent=`${t1} / ${t2} / ${t3}`;
+function updateWaveAnalysis(){
+  const input=document.getElementById("txfManual"); const px=Number(input?.value);
+  if(!Number.isFinite(px)||px<=0){$("waveStage").textContent="等待台指期參考價";$("waveSupport").textContent="輸入價格後計算";$("waveResistance").textContent="輸入價格後計算";$("waveTarget").textContent="輸入價格後計算";return;}
+  const r=v=>Math.round(v/50)*50;
+  const s1=r(px*0.985),s2=r(px*0.970),s3=r(px*0.950); const r1=r(px*1.015),r2=r(px*1.030),r3=r(px*1.050); const t1=r(px*1.045),t2=r(px*1.065),t3=r(px*1.085);
+  $("waveStage").textContent="第3浪延伸 / B浪反彈二擇一"; $("waveSupport").textContent=`${s1} / ${s2} / ${s3}`; $("waveResistance").textContent=`${r1} / ${r2} / ${r3}`; $("waveTarget").textContent=`${t1} / ${t2} / ${t3}`;
 }
 init();
