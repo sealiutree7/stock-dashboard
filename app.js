@@ -4,8 +4,8 @@ const TW_INDEX=[
   {name:"加權指數",symbol:"^TWII",kind:"api"},
   {name:"櫃買指數",symbol:"^TWOII",kind:"api"},
   {name:"電子指數",symbol:"^TEII",kind:"api"},
-  {name:"台指期 TXF8",symbol:"TXF8",kind:"tv",tv:"TAIFEX:TXF1!"},
-  {name:"VIXTWN",symbol:"VIXTWN",kind:"tv",tv:"TWSE:VIXTWN"}
+  {name:"台指期 TXF8",symbol:"TXF8",kind:"manual",input:"manualTxf"},
+  {name:"VIXTWN",symbol:"VIXTWN",kind:"manual",input:"manualVixtwn"}
 ];
 
 const US_THEMES=[
@@ -93,6 +93,12 @@ function init(){
   renderChips("twChips",list("twSymbols"),"tw");
   renderUSTV(activeUS);
   renderTWTV(activeTW);
+  setTimeout(()=>{
+    const a=document.getElementById("manualTxf");
+    const b=document.getElementById("manualVixtwn");
+    if(a)a.addEventListener("input",()=>{loadTWIndex();updateWaveAnalysis();});
+    if(b)b.addEventListener("input",()=>loadTWIndex());
+  },300);
   setTimeout(()=>{const x=document.getElementById("txfManual"); if(x)x.addEventListener("input",updateWaveAnalysis);},200);
   
 
@@ -150,12 +156,13 @@ async function loadTWIndex(){
   const data=await api(`/api/quotes?symbols=${encodeURIComponent(apiItems.map(x=>x.symbol).join(","))}`);
   const map={}; Object.values(data||{}).forEach(q=>map[q.symbol]=q);
   $("twIndexBoard").innerHTML=TW_INDEX.map(x=>{
-    if(x.kind==="tv"){
-      return `<div class="card"><div class="symbol"><span>${x.name}</span><span>${x.symbol}</span></div><div class="session-line">來源：<span class="session-badge">TradingView 報價</span></div><div id="mini-${x.symbol}" class="tv-mini-card"></div><div class="card-meta">若 TradingView 沒顯示，代表該商品不支援內嵌即時報價。</div></div>`;
+    if(x.kind==="manual"){
+      const val=Number(document.getElementById(x.input)?.value);
+      const show=Number.isFinite(val)&&val>0 ? fmt(val) : "--";
+      return `<div class="card"><div class="symbol"><span>${x.name}</span><span>${x.symbol}</span></div><div class="session-line">目前：<span class="session-badge">手動輸入</span></div><div class="price">${show}</div><div class="manual-card-note">此商品無穩定免費即時 API。請在上方輸入數值，波浪分析會同步使用台指期 TXF8 手動值。</div></div>`;
     }
     return cardQuote(x.name,map[x.symbol]);
   }).join("");
-  setTimeout(()=>{renderMiniQuote("mini-TXF8","TAIFEX:TXF1!"); renderMiniQuote("mini-VIXTWN","TWSE:VIXTWN");},100);
   updateWaveAnalysis();
 }
 
@@ -239,13 +246,8 @@ function renderThemeFocusCards(prefix,theme){
     const q=store[sym];
     if(prefix==="tw"){
       const name=TW_NAMES[sym]||sym;
-      if(!q){return `<div class="card"><div class="symbol"><span>${name}</span><span>${sym}</span></div><div class="card-meta">目前沒有報價資料，可能是 Yahoo 沒回或該代號資料源不同。</div></div>`;}
-      return `<div class="card" data-code="${q.code}" data-market="${q.market}">
-        <div class="symbol"><span>${TW_NAMES[q.code]||q.name||q.code}</span><span>${q.code}</span></div>
-        <div class="price">${fmt(q.price)}</div>
-        <div class="change">${changeHtml(q.change,q.changePercent)}</div>
-        <div class="card-meta">Open ${fmt(q.open)} · Prev ${fmt(q.previousClose)}<br/>High ${fmt(q.high)} · Low ${fmt(q.low)}<br/>${q.time||""}</div>
-      </div>`;
+      if(!q){return `<div class="card"><div class="symbol"><span>${name}</span><span>${sym}</span></div><div class="card-meta">目前沒有報價資料。可能是 Yahoo 無資料、代號屬上櫃需 .TWO、或該股資料源不同。</div></div>`;}
+      return `<div class="card" data-code="${q.code}" data-market="${q.market}"><div class="symbol"><span>${TW_NAMES[q.code]||q.name||q.code}</span><span>${q.code}</span></div><div class="price">${fmt(q.price)}</div><div class="change">${changeHtml(q.change,q.changePercent)}</div><div class="card-meta">Open ${fmt(q.open)} · Prev ${fmt(q.previousClose)}<br/>High ${fmt(q.high)} · Low ${fmt(q.low)}<br/>${q.time||""}</div></div>`;
     }
     if(!q){return `<div class="card"><div class="symbol"><span>${sym}</span><span>No data</span></div><div class="card-meta">目前沒有報價資料。</div></div>`;}
     const m=q.main||{};
@@ -267,12 +269,7 @@ function focusTheme(prefix,themeName){
 }
 
 
-function renderMiniQuote(containerId,symbol){
-  const c=document.getElementById(containerId); if(!c)return; c.innerHTML="";
-  const box=document.createElement("div"); box.className="tradingview-widget-container__widget"; c.appendChild(box);
-  const s=document.createElement("script"); s.type="text/javascript"; s.src="https://s3.tradingview.com/external-embedding/embed-widget-single-quote.js"; s.async=true;
-  s.innerHTML=JSON.stringify({symbol:symbol,width:"100%",isTransparent:true,colorTheme:"dark",locale:"zh_TW"}); c.appendChild(s);
-}
+
 
 function renderWidget(containerId,titleId,symbol,titleText){
   if(titleId)$(titleId).textContent=titleText;
@@ -287,10 +284,21 @@ function renderTWTV(code,market){activeTW=code;const m=market==="上櫃"?"TPEX":
 
 function selectUS(s){renderUSTV(s)} function selectTW(code,market){renderTWTV(code,market||twStore[code]?.market)}
 function updateWaveAnalysis(){
-  const input=document.getElementById("txfManual"); const px=Number(input?.value);
-  if(!Number.isFinite(px)||px<=0){$("waveStage").textContent="等待台指期參考價";$("waveSupport").textContent="輸入價格後計算";$("waveResistance").textContent="輸入價格後計算";$("waveTarget").textContent="輸入價格後計算";return;}
+  const px=Number(document.getElementById("manualTxf")?.value);
+  if(!Number.isFinite(px)||px<=0){
+    $("waveStage").textContent="等待台指期 TXF8 手動值";
+    $("waveSupport").textContent="輸入後自動計算";
+    $("waveResistance").textContent="輸入後自動計算";
+    $("waveTarget").textContent="輸入後自動計算";
+    return;
+  }
   const r=v=>Math.round(v/50)*50;
-  const s1=r(px*0.985),s2=r(px*0.970),s3=r(px*0.950); const r1=r(px*1.015),r2=r(px*1.030),r3=r(px*1.050); const t1=r(px*1.045),t2=r(px*1.065),t3=r(px*1.085);
-  $("waveStage").textContent="第3浪延伸 / B浪反彈二擇一"; $("waveSupport").textContent=`${s1} / ${s2} / ${s3}`; $("waveResistance").textContent=`${r1} / ${r2} / ${r3}`; $("waveTarget").textContent=`${t1} / ${t2} / ${t3}`;
+  const s1=r(px*0.985), s2=r(px*0.970), s3=r(px*0.950);
+  const r1=r(px*1.015), r2=r(px*1.030), r3=r(px*1.050);
+  const t1=r(px*1.045), t2=r(px*1.065), t3=r(px*1.085);
+  $("waveStage").textContent="第3浪延伸 / B浪反彈二擇一";
+  $("waveSupport").textContent=`${s1} / ${s2} / ${s3}`;
+  $("waveResistance").textContent=`${r1} / ${r2} / ${r3}`;
+  $("waveTarget").textContent=`${t1} / ${t2} / ${t3}`;
 }
 init();
