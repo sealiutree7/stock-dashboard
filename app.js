@@ -4,8 +4,8 @@ const TW_INDEX=[
   {name:"加權指數",symbol:"^TWII",kind:"api"},
   {name:"櫃買指數",symbol:"^TWOII",kind:"api"},
   {name:"電子指數",symbol:"^TEII",kind:"api"},
-  {name:"台指期 TXF8",symbol:"TXF8",kind:"manual",input:"manualTxf"},
-  {name:"VIXTWN",symbol:"VIXTWN",kind:"manual",input:"manualVixtwn"}
+  {name:"台指期近一 WTX&",symbol:"TXF8",kind:"api"},
+  {name:"VIXTWN",symbol:"VIXTWN",kind:"api"}
 ];
 
 const US_THEMES=[
@@ -93,12 +93,6 @@ function init(){
   renderChips("twChips",list("twSymbols"),"tw");
   renderUSTV(activeUS);
   renderTWTV(activeTW);
-  setTimeout(()=>{
-    const a=document.getElementById("manualTxf");
-    const b=document.getElementById("manualVixtwn");
-    if(a)a.addEventListener("input",()=>{loadTWIndex();updateWaveAnalysis();});
-    if(b)b.addEventListener("input",()=>loadTWIndex());
-  },300);
   setTimeout(()=>{const x=document.getElementById("txfManual"); if(x)x.addEventListener("input",updateWaveAnalysis);},200);
   
 
@@ -152,18 +146,11 @@ async function loadUSIndex(){
   $("usIndexBoard").innerHTML=US_INDEX.map(s=>cardQuote(s==="^VIX"?"VIX":s,map[s])).join("");
 }
 async function loadTWIndex(){
-  const apiItems=TW_INDEX.filter(x=>x.kind==="api");
-  const data=await api(`/api/quotes?symbols=${encodeURIComponent(apiItems.map(x=>x.symbol).join(","))}`);
+  const symbols=TW_INDEX.map(x=>x.symbol);
+  const data=await api(`/api/quotes?symbols=${encodeURIComponent(symbols.join(","))}`);
   const map={}; Object.values(data||{}).forEach(q=>map[q.symbol]=q);
-  $("twIndexBoard").innerHTML=TW_INDEX.map(x=>{
-    if(x.kind==="manual"){
-      const val=Number(document.getElementById(x.input)?.value);
-      const show=Number.isFinite(val)&&val>0 ? fmt(val) : "--";
-      return `<div class="card"><div class="symbol"><span>${x.name}</span><span>${x.symbol}</span></div><div class="session-line">目前：<span class="session-badge">手動輸入</span></div><div class="price">${show}</div><div class="manual-card-note">此商品無穩定免費即時 API。請在上方輸入數值，波浪分析會同步使用台指期 TXF8 手動值。</div></div>`;
-    }
-    return cardQuote(x.name,map[x.symbol]);
-  }).join("");
-  updateWaveAnalysis();
+  $("twIndexBoard").innerHTML=TW_INDEX.map(x=>cardQuote(x.name,map[x.symbol])).join("");
+  updateWaveAnalysis(map["TXF8"] || map["^TWII"]);
 }
 
 function renderChips(elId,symbols,type){
@@ -209,13 +196,21 @@ async function loadTWWatchlist(){
   document.querySelectorAll("#twCards .card[data-code]").forEach(c=>c.onclick=()=>selectTW(c.dataset.code,c.dataset.market));
 }
 
+async function fetchTWQuotesInBatches(codes, batchSize=45){
+  const out={};
+  for(let i=0;i<codes.length;i+=batchSize){
+    const batch=codes.slice(i,i+batchSize);
+    const data=await api(`/api/tw-yahoo-quotes?codes=${encodeURIComponent(batch.join(","))}`);
+    Object.assign(out,data||{});
+  }
+  return out;
+}
+
 async function loadThemeUniverses(){
   const usCodes=uniq(US_THEMES.flatMap(t=>t.symbols));
   const twCodes=uniq(TW_THEMES.flatMap(t=>t.symbols));
-  const [usData,twData]=await Promise.all([
-    api(`/api/session-quotes?symbols=${encodeURIComponent(usCodes.join(","))}`),
-    api(`/api/tw-yahoo-quotes?codes=${encodeURIComponent(twCodes.join(","))}`)
-  ]);
+  const usData=await api(`/api/session-quotes?symbols=${encodeURIComponent(usCodes.join(","))}`);
+  const twData=await fetchTWQuotesInBatches(twCodes,45);
   usThemeStore={}; (usData.results||[]).forEach(x=>{if(x.ok)usThemeStore[x.quote.symbol]=x.quote});
   twThemeStore={}; Object.values(twData||{}).forEach(q=>{if(q.ok)twThemeStore[q.code]=q});
   renderHeat("us",US_THEMES,usThemeStore);
@@ -246,10 +241,17 @@ function renderThemeFocusCards(prefix,theme){
     const q=store[sym];
     if(prefix==="tw"){
       const name=TW_NAMES[sym]||sym;
-      if(!q){return `<div class="card"><div class="symbol"><span>${name}</span><span>${sym}</span></div><div class="card-meta">目前沒有報價資料。可能是 Yahoo 無資料、代號屬上櫃需 .TWO、或該股資料源不同。</div></div>`;}
-      return `<div class="card" data-code="${q.code}" data-market="${q.market}"><div class="symbol"><span>${TW_NAMES[q.code]||q.name||q.code}</span><span>${q.code}</span></div><div class="price">${fmt(q.price)}</div><div class="change">${changeHtml(q.change,q.changePercent)}</div><div class="card-meta">Open ${fmt(q.open)} · Prev ${fmt(q.previousClose)}<br/>High ${fmt(q.high)} · Low ${fmt(q.low)}<br/>${q.time||""}</div></div>`;
+      if(!q){
+        return `<div class="card"><div class="symbol"><span>${name}</span><span>${sym}</span></div><div class="card-meta">目前沒有報價資料。若整個題材都無資料，請確認 Worker 是否已更新到 Phase 2.1。</div></div>`;
+      }
+      return `<div class="card" data-code="${q.code}" data-market="${q.market}">
+        <div class="symbol"><span>${TW_NAMES[q.code]||q.name||q.code}</span><span>${q.code}</span></div>
+        <div class="price">${fmt(q.price)}</div>
+        <div class="change">${changeHtml(q.change,q.changePercent)}</div>
+        <div class="card-meta">Open ${fmt(q.open)} · Prev ${fmt(q.previousClose)}<br/>High ${fmt(q.high)} · Low ${fmt(q.low)}<br/>${q.time||""}</div>
+      </div>`;
     }
-    if(!q){return `<div class="card"><div class="symbol"><span>${sym}</span><span>No data</span></div><div class="card-meta">目前沒有報價資料。</div></div>`;}
+    if(!q)return `<div class="card"><div class="symbol"><span>${sym}</span><span>No data</span></div><div class="card-meta">目前沒有報價資料。</div></div>`;
     const m=q.main||{};
     return `<div class="card" data-symbol="${q.symbol}"><div class="symbol"><span>${q.symbol}</span><span>${q.symbol}</span></div><div class="price">${fmt(m.price)}</div><div class="change">${changeHtml(m.change,m.pct)}</div><div class="card-meta">主價：${m.label||"--"}<br/>Updated ${q.updatedAt?new Date(q.updatedAt).toLocaleTimeString():"--"}</div></div>`;
   }).join("");
@@ -283,13 +285,13 @@ function renderUSTV(s){activeUS=s;renderWidget("usTvChart","usChartTitle",`NASDA
 function renderTWTV(code,market){activeTW=code;const m=market==="上櫃"?"TPEX":"TWSE";renderWidget("twTvChart","twChartTitle",`${m}:${code}`,`${code} ${TW_NAMES[code]||""} TradingView Chart`)}
 
 function selectUS(s){renderUSTV(s)} function selectTW(code,market){renderTWTV(code,market||twStore[code]?.market)}
-function updateWaveAnalysis(){
-  const px=Number(document.getElementById("manualTxf")?.value);
+function updateWaveAnalysis(refQuote){
+  const px=Number(refQuote?.price);
   if(!Number.isFinite(px)||px<=0){
-    $("waveStage").textContent="等待台指期 TXF8 手動值";
-    $("waveSupport").textContent="輸入後自動計算";
-    $("waveResistance").textContent="輸入後自動計算";
-    $("waveTarget").textContent="輸入後自動計算";
+    $("waveStage").textContent="台指期 WTX&：資料等待中";
+    $("waveSupport").textContent="待取得報價";
+    $("waveResistance").textContent="待取得報價";
+    $("waveTarget").textContent="待取得報價";
     return;
   }
   const r=v=>Math.round(v/50)*50;
