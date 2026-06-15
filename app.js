@@ -101,13 +101,26 @@ function init(){
   themeTimer=setInterval(()=>loadThemeUniverses(),300000);
 }
 
+async function loadEconLight(){
+  try{
+    const e=await api(`/api/econ-light`);
+    if(e){
+      const light=$("econLight"), prev=$("econPrev"), phase=$("econPhase"), read=$("econRead");
+      if(light){light.textContent=e.currentLight||"--"; light.nextElementSibling.textContent=`${e.currentMonth||""}｜分數：${e.currentScore??"--"}`;}
+      if(prev){prev.textContent=e.prevLight||"--"; prev.nextElementSibling.textContent=`${e.prevMonth||""}｜分數：${e.prevScore??"--"}`;}
+      if(phase){phase.textContent=e.sourceMode||"API/備援"; phase.nextElementSibling.textContent=e.note||"";}
+      if(read){read.textContent=e.marketRead||"--";}
+    }
+  }catch(err){console.warn("econ light failed",err);}
+}
+
 async function refreshAll(withTheme=false){
   localStorage.setItem("apiBase",$("apiBase").value.trim());
   localStorage.setItem("usSymbols",$("usSymbols").value);
   localStorage.setItem("twSymbols",$("twSymbols").value);
   $("refreshStatus").textContent="Updating...";
   try{
-    await Promise.all([loadDashboard(),loadUSIndex(),loadTWIndex(),loadUSWatchlist(),loadTWWatchlist()]);
+    await Promise.all([loadDashboard(),loadUSIndex(),loadTWIndex(),loadUSWatchlist(),loadTWWatchlist(),loadEconLight()]);
     if(withTheme) await loadThemeUniverses();
     $("refreshStatus").textContent=`Auto updated ${new Date().toLocaleTimeString()} · 5s`;
   }catch(e){
@@ -210,20 +223,20 @@ async function loadThemeUniverses(){
   const usCodes=uniq(US_THEMES.flatMap(t=>t.symbols));
   const twCodes=uniq(TW_THEMES.flatMap(t=>t.symbols));
   const usData=await api(`/api/session-quotes?symbols=${encodeURIComponent(usCodes.join(","))}`);
-  const twData=await fetchTWQuotesInBatches(twCodes,45);
+  const twData=await fetchTWQuotesInBatches(twCodes,20);
   usThemeStore={}; (usData.results||[]).forEach(x=>{if(x.ok)usThemeStore[x.quote.symbol]=x.quote});
-  twThemeStore={}; Object.values(twData||{}).forEach(q=>{if(q.ok)twThemeStore[q.code]=q});
+  twThemeStore={}; Object.values(twData||{}).forEach(q=>{if(q&&q.code)twThemeStore[q.code]=q});
   renderHeat("us",US_THEMES,usThemeStore);
   renderHeat("tw",TW_THEMES,twThemeStore);
 }
 function renderHeat(prefix,themes,store){
-  const vals=Object.values(store).map(q=>({symbol:q.symbol||q.code,name:prefix==="tw"?(TW_NAMES[q.code]||q.name||q.code):(q.symbol||q.code),price:q.main?.price??q.price,pct:q.main?.pct??q.changePercent})).filter(x=>Number.isFinite(Number(x.pct)));
+  const vals=Object.values(store).filter(q=>q&&q.ok!==false).map(q=>({symbol:q.symbol||q.code,name:prefix==="tw"?(TW_NAMES[q.code]||q.name||q.code):(q.symbol||q.code),price:q.main?.price??q.price,pct:q.main?.pct??q.changePercent})).filter(x=>Number.isFinite(Number(x.pct)));
   const up=vals.filter(x=>x.pct>0).length,total=vals.length,b=total?up/total*100:0,top=[...vals].sort((a,b)=>b.pct-a.pct)[0];
   $(`${prefix}Breadth`).textContent=total?`${fmt(b,1)}%`:"--";
   $(`${prefix}MarketMode`).textContent=b>=70?"全面偏多":b>=50?"結構輪動":"資金保守";
   $(`${prefix}MarketModeDesc`).textContent=total?`上漲 ${up}/${total} 檔`:"--";
   if(top){$(`${prefix}TopStock`).textContent=top.name;$(`${prefix}TopStockDesc`).textContent=`${fmt(top.price)}｜${top.pct>0?"+":""}${fmt(top.pct)}%`;}
-  const stats=themes.map(t=>{const p=t.symbols.map(s=>store[s]).filter(Boolean).map(q=>Number(q.main?.pct??q.changePercent)).filter(Number.isFinite);const avg=p.length?p.reduce((a,b)=>a+b,0)/p.length:null;const ups=p.filter(x=>x>0).length;return {...t,avg,ups,count:p.length,score:avg===null?-999:avg*1.6+(p.length?ups/p.length*100:0)*.025};}).filter(x=>x.count>0).sort((a,b)=>b.score-a.score).slice(0,10);
+  const stats=themes.map(t=>{const p=t.symbols.map(s=>store[s]).filter(q=>q&&q.ok!==false).map(q=>Number(q.main?.pct??q.changePercent)).filter(Number.isFinite);const avg=p.length?p.reduce((a,b)=>a+b,0)/p.length:null;const ups=p.filter(x=>x>0).length;return {...t,avg,ups,count:p.length,score:avg===null?-999:avg*1.6+(p.length?ups/p.length*100:0)*.025};}).filter(x=>x.count>0).sort((a,b)=>b.score-a.score).slice(0,10);
   if(stats[0]){$(`${prefix}TopTheme`).textContent=stats[0].name;$(`${prefix}TopThemeDesc`).textContent=`平均 ${stats[0].avg>0?"+":""}${fmt(stats[0].avg)}%｜上漲 ${stats[0].ups}/${stats[0].count}`;}
   $(`${prefix}ThemeRank`).innerHTML=stats.map((s,i)=>`<div class="rank-pill ${i===0?"hot":i<=2?"warm":""}" data-prefix="${prefix}" data-theme-name="${s.name}">#${i+1} <strong>${s.name}</strong><br>${s.avg>0?"+":""}${fmt(s.avg)}%｜${s.ups}/${s.count} 上漲</div>`).join("");
   renderThemeMap(prefix,themes,stats);
@@ -242,7 +255,10 @@ function renderThemeFocusCards(prefix,theme){
     if(prefix==="tw"){
       const name=TW_NAMES[sym]||sym;
       if(!q){
-        return `<div class="card"><div class="symbol"><span>${name}</span><span>${sym}</span></div><div class="card-meta">目前沒有報價資料。若整個題材都無資料，請確認 Worker 是否已更新到 Phase 2.1。</div></div>`;
+        return `<div class="card"><div class="symbol"><span>${name}</span><span>${sym}</span></div><div class="card-meta">尚未收到此檔報價。若在後段題材，請確認已更新到 Phase 2.2，並重新按「更新全部」。</div></div>`;
+      }
+      if(q.ok===false){
+        return `<div class="card"><div class="symbol"><span>${name}</span><span>${sym}</span></div><div class="card-meta">${q.error||"資料源回傳失敗"}</div></div>`;
       }
       return `<div class="card" data-code="${q.code}" data-market="${q.market}">
         <div class="symbol"><span>${TW_NAMES[q.code]||q.name||q.code}</span><span>${q.code}</span></div>
@@ -252,8 +268,14 @@ function renderThemeFocusCards(prefix,theme){
       </div>`;
     }
     if(!q)return `<div class="card"><div class="symbol"><span>${sym}</span><span>No data</span></div><div class="card-meta">目前沒有報價資料。</div></div>`;
+    if(q.ok===false)return `<div class="card"><div class="symbol"><span>${sym}</span><span>Error</span></div><div class="card-meta">${q.error||"資料源回傳失敗"}</div></div>`;
     const m=q.main||{};
-    return `<div class="card" data-symbol="${q.symbol}"><div class="symbol"><span>${q.symbol}</span><span>${q.symbol}</span></div><div class="price">${fmt(m.price)}</div><div class="change">${changeHtml(m.change,m.pct)}</div><div class="card-meta">主價：${m.label||"--"}<br/>Updated ${q.updatedAt?new Date(q.updatedAt).toLocaleTimeString():"--"}</div></div>`;
+    return `<div class="card" data-symbol="${q.symbol}">
+      <div class="symbol"><span>${q.symbol}</span><span>${q.symbol}</span></div>
+      <div class="price">${fmt(m.price)}</div>
+      <div class="change">${changeHtml(m.change,m.pct)}</div>
+      <div class="card-meta">主價：${m.label||"--"}<br/>Updated ${q.updatedAt?new Date(q.updatedAt).toLocaleTimeString():"--"}</div>
+    </div>`;
   }).join("");
   document.querySelectorAll(`#${prefix}ThemeFocusCards .card[data-symbol]`).forEach(c=>c.onclick=()=>selectUS(c.dataset.symbol));
   document.querySelectorAll(`#${prefix}ThemeFocusCards .card[data-code]`).forEach(c=>c.onclick=()=>selectTW(c.dataset.code,c.dataset.market));
