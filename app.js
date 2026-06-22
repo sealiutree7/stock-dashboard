@@ -209,12 +209,18 @@ async function loadTWWatchlist(){
   document.querySelectorAll("#twCards .card[data-code]").forEach(c=>c.onclick=()=>selectTW(c.dataset.code,c.dataset.market));
 }
 
-async function fetchTWQuotesInBatches(codes, batchSize=45){
+async function fetchTWQuotesInBatches(codes, batchSize=25){
   const out={};
   for(let i=0;i<codes.length;i+=batchSize){
     const batch=codes.slice(i,i+batchSize);
-    const data=await api(`/api/tw-yahoo-quotes?codes=${encodeURIComponent(batch.join(","))}`);
-    Object.assign(out,data||{});
+    try{
+      const data=await api(`/api/tw-yahoo-quotes?codes=${encodeURIComponent(batch.join(","))}`);
+      Object.assign(out,data||{});
+    }catch(err){
+      batch.forEach(code=>{
+        out[code]={ok:false,code,error:`batch failed: ${err.message||err}`};
+      });
+    }
   }
   return out;
 }
@@ -255,7 +261,7 @@ function renderThemeFocusCards(prefix,theme){
     if(prefix==="tw"){
       const name=TW_NAMES[sym]||sym;
       if(!q){
-        return `<div class="card"><div class="symbol"><span>${name}</span><span>${sym}</span></div><div class="card-meta">尚未收到此檔報價。若在後段題材，請確認已更新到 Phase 2.2，並重新按「更新全部」。</div></div>`;
+        return `<div class="card"><div class="symbol"><span>${name}</span><span>${sym}</span></div><div class="card-meta">尚未收到此檔報價；請先按「更新全部」。</div></div>`;
       }
       if(q.ok===false){
         return `<div class="card"><div class="symbol"><span>${name}</span><span>${sym}</span></div><div class="card-meta">${q.error||"資料源回傳失敗"}</div></div>`;
@@ -264,7 +270,7 @@ function renderThemeFocusCards(prefix,theme){
         <div class="symbol"><span>${TW_NAMES[q.code]||q.name||q.code}</span><span>${q.code}</span></div>
         <div class="price">${fmt(q.price)}</div>
         <div class="change">${changeHtml(q.change,q.changePercent)}</div>
-        <div class="card-meta">Open ${fmt(q.open)} · Prev ${fmt(q.previousClose)}<br/>High ${fmt(q.high)} · Low ${fmt(q.low)}<br/>${q.time||""}</div>
+        <div class="card-meta">Open ${fmt(q.open)} · Prev ${fmt(q.previousClose)}<br/>High ${fmt(q.high)} · Low ${fmt(q.low)}<br/>${q.time||""}<br/>Source ${q.source||""}</div>
       </div>`;
     }
     if(!q)return `<div class="card"><div class="symbol"><span>${sym}</span><span>No data</span></div><div class="card-meta">目前沒有報價資料。</div></div>`;
