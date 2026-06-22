@@ -44,6 +44,8 @@ const $=id=>document.getElementById(id);
 let usThemeStore={},twThemeStore={},twStore={},usStore={};
 let activeUS="NVDA",activeTW="2330";
 let themeTimer=null, quoteTimer=null;
+let isRefreshing=false;
+let isThemeRefreshing=false;
 
 function apiBase(){return $("apiBase").value.trim().replace(/\/$/,"")}
 function list(id){return $(id).value.split(",").map(s=>s.trim().toUpperCase()).filter(Boolean)}
@@ -55,13 +57,25 @@ function changeHtml(ch,pct){
   const sign=Number(ch)>0?"+":"";
   return `<span class="${colorClass(ch)}">${sign}${fmt(ch)} (${sign}${fmt(pct)}%)</span>`;
 }
-async function api(path){
+async function api(path, retries=2){
   if(!apiBase())throw new Error("請先填 Cloudflare Worker API URL");
   const sep=path.includes("?")?"&":"?";
-  const r=await fetch(`${apiBase()}${path}${sep}_=${Date.now()}`);
-  const j=await r.json();
-  if(!j.ok)throw new Error(j.error||"API error");
-  return j.data;
+  let lastErr;
+  for(let i=0;i<=retries;i++){
+    try{
+      const r=await fetch(`${apiBase()}${path}${sep}_=${Date.now()}`, {cache:"no-store"});
+      const text=await r.text();
+      let j;
+      try{ j=JSON.parse(text); }catch(e){ throw new Error(`API 非 JSON 回應：${text.slice(0,80)}`); }
+      if(!r.ok)throw new Error(j.error||`HTTP ${r.status}`);
+      if(!j.ok)throw new Error(j.error||"API error");
+      return j.data;
+    }catch(err){
+      lastErr=err;
+      if(i<retries) await new Promise(res=>setTimeout(res, 450*(i+1)));
+    }
+  }
+  throw lastErr;
 }
 function quoteMain(q){return q.main||{price:q.price,change:q.change,pct:q.changePercent,label:"最近價"}}
 
@@ -115,16 +129,25 @@ async function loadEconLight(){
 }
 
 async function refreshAll(withTheme=false){
+  if(isRefreshing)return;
+  isRefreshing=true;
   localStorage.setItem("apiBase",$("apiBase").value.trim());
   localStorage.setItem("usSymbols",$("usSymbols").value);
   localStorage.setItem("twSymbols",$("twSymbols").value);
   $("refreshStatus").textContent="Updating...";
   try{
-    await Promise.all([loadDashboard(),loadUSIndex(),loadTWIndex(),loadUSWatchlist(),loadTWWatchlist(),loadEconLight()]);
+    await loadDashboard();
+    await loadUSIndex();
+    await loadTWIndex();
+    await loadUSWatchlist();
+    await loadTWWatchlist();
+    if(typeof loadEconLight==="function") await loadEconLight();
     if(withTheme) await loadThemeUniverses();
     $("refreshStatus").textContent=`Auto updated ${new Date().toLocaleTimeString()} · 5s`;
   }catch(e){
     $("refreshStatus").textContent=`Error: ${e.message}`;
+  }finally{
+    isRefreshing=false;
   }
 }
 
@@ -209,31 +232,46 @@ async function loadTWWatchlist(){
   document.querySelectorAll("#twCards .card[data-code]").forEach(c=>c.onclick=()=>selectTW(c.dataset.code,c.dataset.market));
 }
 
-async function fetchTWQuotesInBatches(codes, batchSize=25){
+async function fetchTWQuotesInBatches(codes, batchSize=12){
   const out={};
   for(let i=0;i<codes.length;i+=batchSize){
     const batch=codes.slice(i,i+batchSize);
     try{
-      const data=await api(`/api/tw-yahoo-quotes?codes=${encodeURIComponent(batch.join(","))}`);
+      const data=await api(`/api/tw-yahoo-quotes?codes=${encodeURIComponent(batch.join(","))}`,1);
       Object.assign(out,data||{});
     }catch(err){
       batch.forEach(code=>{
         out[code]={ok:false,code,error:`batch failed: ${err.message||err}`};
       });
     }
+    await new Promise(res=>setTimeout(res,120));
   }
   return out;
 }
 
 async function loadThemeUniverses(){
-  const usCodes=uniq(US_THEMES.flatMap(t=>t.symbols));
-  const twCodes=uniq(TW_THEMES.flatMap(t=>t.symbols));
-  const usData=await api(`/api/session-quotes?symbols=${encodeURIComponent(usCodes.join(","))}`);
-  const twData=await fetchTWQuotesInBatches(twCodes,20);
-  usThemeStore={}; (usData.results||[]).forEach(x=>{if(x.ok)usThemeStore[x.quote.symbol]=x.quote});
-  twThemeStore={}; Object.values(twData||{}).forEach(q=>{if(q&&q.code)twThemeStore[q.code]=q});
-  renderHeat("us",US_THEMES,usThemeStore);
-  renderHeat("tw",TW_THEMES,twThemeStore);
+  if(isThemeRefreshing)return;
+  isThemeRefreshing=true;
+  try{
+    const usCodes=uniq(US_THEMES.flatMap(t=>t.symbols));
+    const twCodes=uniq(TW_THEMES.flatMap(t=>t.symbols));
+
+    const usData=await api(`/api/session-quotes?symbols=${encodeURIComponent(usCodes.join(","))}`,1);
+    const twData=await fetchTWQuotesInBatches(twCodes,20);
+
+    usThemeStore={};
+    (usData.results||[]).forEach(x=>{if(x.ok)usThemeStore[x.quote.symbol]=x.quote});
+
+    twThemeStore={};
+    Object.values(twData||{}).forEach(q=>{if(q&&q.code)twThemeStore[q.code]=q});
+
+    renderHeat("us",US_THEMES,usThemeStore);
+    renderHeat("tw",TW_THEMES,twThemeStore);
+  }catch(err){
+    console.warn("loadThemeUniverses failed", err);
+  }finally{
+    isThemeRefreshing=false;
+  }
 }
 function renderHeat(prefix,themes,store){
   const vals=Object.values(store).filter(q=>q&&q.ok!==false).map(q=>({symbol:q.symbol||q.code,name:prefix==="tw"?(TW_NAMES[q.code]||q.name||q.code):(q.symbol||q.code),price:q.main?.price??q.price,pct:q.main?.pct??q.changePercent})).filter(x=>Number.isFinite(Number(x.pct)));
