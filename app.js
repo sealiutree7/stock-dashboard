@@ -52,6 +52,40 @@ function list(id){return $(id).value.split(",").map(s=>s.trim().toUpperCase()).f
 function uniq(a){return [...new Set(a)]}
 function fmt(n,d=2){const x=Number(n);return Number.isFinite(x)?x.toFixed(d):"--"}
 function colorClass(v){return Number(v)>0?"up":Number(v)<0?"down":"flat"}
+
+function pctObj(price, base){
+  price=Number(price); base=Number(base);
+  if(!Number.isFinite(price)||!Number.isFinite(base)||base===0)return {change:null,pct:null};
+  const change=price-base;
+  return {change, pct:change/base*100};
+}
+function normalizedUSMain(q){
+  if(!q)return {};
+  const m=q.main||{};
+  const label=m.label||"最近價";
+  const price=Number(m.price);
+  let base=null;
+  // 盤前/盤後/夜盤：統一對照日盤收盤，避免 Yahoo meta previousClose 異常。
+  if(label.includes("盤前") || label.includes("夜盤") || label.includes("盤後")){
+    base=Number(q.segments?.dayClose?.price ?? q.segments?.dayClose?.last ?? q.previousClose);
+  }else{
+    // 日盤即時：對照前一交易日收盤
+    base=Number(q.previousClose);
+  }
+  const p=pctObj(price,base);
+  return {...m, price, change:p.change, pct:p.pct, base};
+}
+function metricPct(q,prefix){
+  if(!q||q.ok===false)return null;
+  if(prefix==="us")return normalizedUSMain(q).pct;
+  return q.main?.pct ?? q.changePercent;
+}
+function metricPrice(q,prefix){
+  if(!q||q.ok===false)return null;
+  if(prefix==="us")return normalizedUSMain(q).price;
+  return q.main?.price ?? q.price;
+}
+
 function changeHtml(ch,pct){
   if(ch===null||ch===undefined||pct===null||pct===undefined)return `<span class="flat">--</span>`;
   const sign=Number(ch)>0?"+":"";
@@ -200,14 +234,14 @@ async function loadUSWatchlist(){
   usStore={};
   $("usCards").innerHTML=(data.results||[]).map(x=>{
     if(!x.ok)return `<div class="card"><div class="symbol"><span>${x.symbol}</span><span>Error</span></div><div class="card-meta">${x.error}</div></div>`;
-    const q=x.quote; usStore[q.symbol]=q; const m=q.main||{};
+    const q=x.quote; usStore[q.symbol]=q; const m=normalizedUSMain(q);
     return `<div class="card" data-symbol="${q.symbol}">
       <div class="symbol"><span>${q.symbol}</span><span>${q.symbol}</span></div>
       <div class="session-line">目前：<span class="session-badge">${m.label||"--"}</span></div>
       <div class="price">${fmt(m.price)}</div>
       <div class="change">${changeHtml(m.change,m.pct)}</div>
       <div class="segment-grid">${seg("盤前最後",q.segments?.pre)}${seg("日盤收盤",q.segments?.dayClose)}${seg("夜盤最後",q.segments?.nightClose)}</div>
-      <div class="card-meta">Updated ${q.updatedAt?new Date(q.updatedAt).toLocaleTimeString():"--"}</div>
+      <div class="card-meta">基準 ${fmt(m.base)} · Updated ${q.updatedAt?new Date(q.updatedAt).toLocaleTimeString():"--"}</div>
     </div>`;
   }).join("");
   document.querySelectorAll("#usCards .card[data-symbol]").forEach(c=>c.onclick=()=>selectUS(c.dataset.symbol));
@@ -274,13 +308,13 @@ async function loadThemeUniverses(){
   }
 }
 function renderHeat(prefix,themes,store){
-  const vals=Object.values(store).filter(q=>q&&q.ok!==false).map(q=>({symbol:q.symbol||q.code,name:prefix==="tw"?(TW_NAMES[q.code]||q.name||q.code):(q.symbol||q.code),price:q.main?.price??q.price,pct:q.main?.pct??q.changePercent})).filter(x=>Number.isFinite(Number(x.pct)));
+  const vals=Object.values(store).filter(q=>q&&q.ok!==false).map(q=>({symbol:q.symbol||q.code,name:prefix==="tw"?(TW_NAMES[q.code]||q.name||q.code):(q.symbol||q.code),price:metricPrice(q,prefix),pct:metricPct(q,prefix)})).filter(x=>Number.isFinite(Number(x.pct)));
   const up=vals.filter(x=>x.pct>0).length,total=vals.length,b=total?up/total*100:0,top=[...vals].sort((a,b)=>b.pct-a.pct)[0];
   $(`${prefix}Breadth`).textContent=total?`${fmt(b,1)}%`:"--";
   $(`${prefix}MarketMode`).textContent=b>=70?"全面偏多":b>=50?"結構輪動":"資金保守";
   $(`${prefix}MarketModeDesc`).textContent=total?`上漲 ${up}/${total} 檔`:"--";
   if(top){$(`${prefix}TopStock`).textContent=top.name;$(`${prefix}TopStockDesc`).textContent=`${fmt(top.price)}｜${top.pct>0?"+":""}${fmt(top.pct)}%`;}
-  const stats=themes.map(t=>{const p=t.symbols.map(s=>store[s]).filter(q=>q&&q.ok!==false).map(q=>Number(q.main?.pct??q.changePercent)).filter(Number.isFinite);const avg=p.length?p.reduce((a,b)=>a+b,0)/p.length:null;const ups=p.filter(x=>x>0).length;return {...t,avg,ups,count:p.length,score:avg===null?-999:avg*1.6+(p.length?ups/p.length*100:0)*.025};}).filter(x=>x.count>0).sort((a,b)=>b.score-a.score).slice(0,10);
+  const stats=themes.map(t=>{const p=t.symbols.map(s=>store[s]).filter(q=>q&&q.ok!==false).map(q=>Number(metricPct(q,prefix))).filter(Number.isFinite);const avg=p.length?p.reduce((a,b)=>a+b,0)/p.length:null;const ups=p.filter(x=>x>0).length;return {...t,avg,ups,count:p.length,score:avg===null?-999:avg*1.6+(p.length?ups/p.length*100:0)*.025};}).filter(x=>x.count>0).sort((a,b)=>b.score-a.score).slice(0,10);
   if(stats[0]){$(`${prefix}TopTheme`).textContent=stats[0].name;$(`${prefix}TopThemeDesc`).textContent=`平均 ${stats[0].avg>0?"+":""}${fmt(stats[0].avg)}%｜上漲 ${stats[0].ups}/${stats[0].count}`;}
   $(`${prefix}ThemeRank`).innerHTML=stats.map((s,i)=>`<div class="rank-pill ${i===0?"hot":i<=2?"warm":""}" data-prefix="${prefix}" data-theme-name="${s.name}">#${i+1} <strong>${s.name}</strong><br>${s.avg>0?"+":""}${fmt(s.avg)}%｜${s.ups}/${s.count} 上漲</div>`).join("");
   renderThemeMap(prefix,themes,stats);
@@ -313,12 +347,12 @@ function renderThemeFocusCards(prefix,theme){
     }
     if(!q)return `<div class="card"><div class="symbol"><span>${sym}</span><span>No data</span></div><div class="card-meta">目前沒有報價資料。</div></div>`;
     if(q.ok===false)return `<div class="card"><div class="symbol"><span>${sym}</span><span>Error</span></div><div class="card-meta">${q.error||"資料源回傳失敗"}</div></div>`;
-    const m=q.main||{};
+    const m=normalizedUSMain(q);
     return `<div class="card" data-symbol="${q.symbol}">
       <div class="symbol"><span>${q.symbol}</span><span>${q.symbol}</span></div>
       <div class="price">${fmt(m.price)}</div>
       <div class="change">${changeHtml(m.change,m.pct)}</div>
-      <div class="card-meta">主價：${m.label||"--"}<br/>Updated ${q.updatedAt?new Date(q.updatedAt).toLocaleTimeString():"--"}</div>
+      <div class="card-meta">主價：${m.label||"--"}｜基準 ${fmt(m.base)}<br/>Updated ${q.updatedAt?new Date(q.updatedAt).toLocaleTimeString():"--"}</div>
     </div>`;
   }).join("");
   document.querySelectorAll(`#${prefix}ThemeFocusCards .card[data-symbol]`).forEach(c=>c.onclick=()=>selectUS(c.dataset.symbol));
