@@ -120,13 +120,12 @@ async function refreshAll(withTheme=false){
 }
 
 async function loadDashboard(){
-  const data=await api(`/api/dashboard`);
-  const vix=data.vix, btc=data.btc, tnx=data.us10y;
-  $("usRisk").textContent=data.risk||"🟡 Neutral";
-  $("usRiskDesc").textContent=data.riskDesc||"VIX / BTC / 10Y 綜合判斷";
-  $("vixValue").innerHTML=`${fmt(vix?.price)} ${changeHtml(vix?.change,vix?.changePercent)}`;
-  $("btcValue").innerHTML=`${fmt(btc?.price,0)} ${changeHtml(btc?.change,btc?.changePercent)}`;
-  $("bond10y").innerHTML=`${fmt(tnx?.price)} ${changeHtml(tnx?.change,tnx?.changePercent)}`;
+  const data = await api(`/api/dashboard`,1);
+  $("usRisk").textContent = data.risk || "🟡 Neutral";
+  $("usRiskDesc").textContent = data.riskDesc || "VIX / BTC / 10Y 綜合判斷";
+  $("vixValue").innerHTML = `${fmt(data.vix?.price)} ${changeHtml(data.vix?.change,data.vix?.changePercent)}`;
+  $("btcValue").innerHTML = `${fmt(data.btc?.price,0)} ${changeHtml(data.btc?.change,data.btc?.changePercent)}`;
+  $("bond10y").innerHTML = `${fmt(data.us10y?.price)} ${changeHtml(data.us10y?.change,data.us10y?.changePercent)}`;
 }
 
 function cardQuote(label,q){
@@ -320,4 +319,56 @@ function updateWaveAnalysis(refQuote){
   $("waveResistance").textContent=`${r1} / ${r2} / ${r3}`;
   $("waveTarget").textContent=`${t1} / ${t2} / ${t3}`;
 }
+
+function init(){
+  try{
+    if($("apiBase") && !$("apiBase").value){
+      $("apiBase").value = localStorage.getItem("apiBase") || "https://stock-session-worker.selu010107.workers.dev";
+    }
+    if($("usSymbols")){
+      $("usSymbols").value = localStorage.getItem("usSymbols") || $("usSymbols").value;
+    }
+    if($("twSymbols")){
+      $("twSymbols").value = localStorage.getItem("twSymbols") || $("twSymbols").value;
+    }
+
+    const usBtn = document.querySelector(".tabs .tab:nth-child(1)");
+    const twBtn = document.querySelector(".tabs .tab:nth-child(2)");
+
+    function showPage(page){
+      if(page==="us"){
+        $("usPage")?.classList.add("active");
+        $("twPage")?.classList.remove("active");
+        usBtn?.classList.add("active");
+        twBtn?.classList.remove("active");
+        renderUSTV?.(activeUS || "MU");
+      }else{
+        $("twPage")?.classList.add("active");
+        $("usPage")?.classList.remove("active");
+        twBtn?.classList.add("active");
+        usBtn?.classList.remove("active");
+        renderTWTV?.(activeTW || "2330", twStore?.[activeTW]?.market || "上市");
+      }
+    }
+
+    usBtn && (usBtn.onclick = () => showPage("us"));
+    twBtn && (twBtn.onclick = () => showPage("tw"));
+
+    $("refreshBtn") && ($("refreshBtn").onclick = () => refreshAll(true));
+    $("txfManual") && $("txfManual").addEventListener("input", () => updateWaveAnalysis(null));
+
+    $("refreshStatus") && ($("refreshStatus").textContent = "Loading...");
+    showPage("us");
+    refreshAll(true);
+
+    if(window.__anjouQuoteTimer) clearInterval(window.__anjouQuoteTimer);
+    if(window.__anjouThemeTimer) clearInterval(window.__anjouThemeTimer);
+    window.__anjouQuoteTimer = setInterval(() => refreshAll(false), 5000);
+    window.__anjouThemeTimer = setInterval(() => loadThemeUniverses(), 5*60*1000);
+  }catch(e){
+    console.error("Anjou init failed", e);
+    if($("refreshStatus")) $("refreshStatus").textContent = `Init Error: ${e.message}`;
+  }
+}
+
 init();
