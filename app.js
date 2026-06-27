@@ -66,14 +66,10 @@ async function api(path, retries=2){
       const r=await fetch(`${apiBase()}${path}${sep}_=${Date.now()}`, {cache:"no-store"});
       const text=await r.text();
       let j;
-      try{ j=JSON.parse(text); }catch(e){ throw new Error(`API 非 JSON 回應：${text.slice(0,80)}`); }
-      if(!r.ok)throw new Error(j.error||`HTTP ${r.status}`);
-      if(!j.ok)throw new Error(j.error||"API error");
+      try{ j=JSON.parse(text); }catch(e){ throw new Error(`API 非 JSON 回應：${text.slice(0,100)}`); }
+      if(!r.ok || !j.ok)throw new Error(j.error || `HTTP ${r.status}`);
       return j.data;
-    }catch(err){
-      lastErr=err;
-      if(i<retries) await new Promise(res=>setTimeout(res, 450*(i+1)));
-    }
+    }catch(err){ lastErr=err; if(i<retries)await new Promise(res=>setTimeout(res,350*(i+1))); }
   }
   throw lastErr;
 }
@@ -82,42 +78,9 @@ function metricPrice(q){return q?.main?.price ?? q?.price;}
 function metricPct(q){return q?.main?.pct ?? q?.changePercent;}
 function metricChange(q){return q?.main?.change ?? q?.change;}
 
-function quoteMain(q){return q.main||{price:q.price,change:q.change,pct:q.changePercent,label:"最近價"}}
-
-function init(){
-  $("apiBase").value=localStorage.getItem("apiBase")||"https://stock-session-worker.selu010107.workers.dev";
-  $("usSymbols").value=localStorage.getItem("usSymbols")||$("usSymbols").value;
-  $("twSymbols").value=localStorage.getItem("twSymbols")||$("twSymbols").value;
-  $("refreshBtn").onclick=()=>refreshAll(true);
-
-  document.querySelectorAll(".tab").forEach(btn=>{
-    btn.onclick=()=>{
-      document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
-      btn.classList.add("active");
-      document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));
-      $(btn.dataset.page).classList.add("active");
-    };
-  });
-
-  document.addEventListener("click",e=>{
-    const rank=e.target.closest(".rank-pill");
-    if(rank){focusTheme(rank.dataset.prefix,rank.dataset.themeName);return;}
-    const box=e.target.closest(".theme-box");
-    if(box){focusTheme(box.dataset.prefix,box.dataset.themeName);return;}
-  });
-
-  renderThemeMap("us",US_THEMES,[]);
-  renderThemeMap("tw",TW_THEMES,[]);
-  renderChips("usChips",list("usSymbols"),"us");
-  renderChips("twChips",list("twSymbols"),"tw");
-  renderUSTV(activeUS);
-  renderTWTV(activeTW);
-  setTimeout(()=>{const x=document.getElementById("txfManual"); if(x)x.addEventListener("input",updateWaveAnalysis);},200);
-  
-
-  refreshAll(true);
-  quoteTimer=setInterval(()=>refreshAll(false),5000);
-  themeTimer=setInterval(()=>loadThemeUniverses(),300000);
+function quoteMain(q){
+  if(q?.main)return q.main;
+  return {label:q?.sessionLabel||q?.market||"最近價",price:q?.price,change:q?.change,pct:q?.changePercent};
 }
 
 async function loadEconLight(){
@@ -183,7 +146,7 @@ async function loadUSIndex(){
   $("usIndexBoard").innerHTML=US_INDEX.map(s=>cardQuote(s==="^VIX"?"VIX":s,map[s])).join("");
 }
 async function loadTWIndex(){
-  const data=await api(`/api/tw-index`);
+  const data=await api(`/api/tw-index`,1);
   const map={}; Object.values(data||{}).forEach(q=>map[q.symbol]=q);
   $("twIndexBoard").innerHTML=TW_INDEX.map(x=>cardQuote(x.name,map[x.symbol])).join("");
   updateWaveAnalysis(map["TXF8"] || map["^TWII"]);
@@ -232,17 +195,13 @@ async function loadTWWatchlist(){
   document.querySelectorAll("#twCards .card[data-code]").forEach(c=>c.onclick=()=>selectTW(c.dataset.code,c.dataset.market));
 }
 
-async function fetchTWQuotesInBatches(codes, batchSize=16){
+async function fetchTWQuotesInBatches(codes, batchSize=12){
   const out={};
   for(let i=0;i<codes.length;i+=batchSize){
     const batch=codes.slice(i,i+batchSize);
-    try{
-      const data=await api(`/api/tw-quotes?codes=${encodeURIComponent(batch.join(","))}`,1);
-      Object.assign(out,data||{});
-    }catch(err){
-      batch.forEach(code=>{ out[code]={ok:false,code,error:`batch failed: ${err.message||err}`}; });
-    }
-    await new Promise(res=>setTimeout(res,90));
+    try{ const data=await api(`/api/tw-quotes?codes=${encodeURIComponent(batch.join(","))}`,1); Object.assign(out,data||{}); }
+    catch(err){ batch.forEach(code=>{ out[code]={ok:false,code,error:`batch failed: ${err.message||err}`}; }); }
+    await new Promise(res=>setTimeout(res,120));
   }
   return out;
 }
@@ -254,18 +213,15 @@ async function loadThemeUniverses(){
     const usCodes=uniq(US_THEMES.flatMap(t=>t.symbols));
     const twCodes=uniq(TW_THEMES.flatMap(t=>t.symbols));
     const usData=await api(`/api/session-quotes?symbols=${encodeURIComponent(usCodes.join(","))}`,1);
-    const twData=await fetchTWQuotesInBatches(twCodes,16);
-    usThemeStore={};
-    (usData.results||[]).forEach(x=>{if(x.ok)usThemeStore[x.quote.symbol]=x.quote});
-    twThemeStore={};
-    Object.values(twData||{}).forEach(q=>{if(q&&q.code)twThemeStore[q.code]=q});
+    const twData=await fetchTWQuotesInBatches(twCodes,12);
+    const nextUS={}; (usData.results||[]).forEach(x=>{if(x.ok)nextUS[x.quote.symbol]=x.quote});
+    const nextTW={}; Object.values(twData||{}).forEach(q=>{if(q&&q.code)nextTW[q.code]=q});
+    if(Object.keys(nextUS).length)usThemeStore=nextUS;
+    if(Object.keys(nextTW).length)twThemeStore=nextTW;
     renderHeat("us",US_THEMES,usThemeStore);
     renderHeat("tw",TW_THEMES,twThemeStore);
-  }catch(err){
-    console.warn("loadThemeUniverses failed", err);
-  }finally{
-    isThemeRefreshing=false;
-  }
+  }catch(err){ console.warn("loadThemeUniverses failed", err); }
+  finally{ isThemeRefreshing=false; }
 }
 function renderHeat(prefix,themes,store){
   const vals=Object.values(store).filter(q=>q&&q.ok!==false).map(q=>({symbol:q.symbol||q.code,name:prefix==="tw"?(TW_NAMES[q.code]||q.name||q.code):(q.symbol||q.code),price:metricPrice(q),pct:metricPct(q)})).filter(x=>Number.isFinite(Number(x.pct)));
