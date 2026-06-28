@@ -346,7 +346,7 @@ function renderThemeMap(prefix,themes,store){
     return `<div class="theme-box" data-prefix="${prefix}" data-theme-name="${t.name}">
       <div class="theme-title">${t.name} <span class="${cssMove(st.avg)}">${st.avg==null?"--":`${st.avg>0?"+":""}${fmt(st.avg)}%`}</span></div>
       <div class="theme-desc">${t.desc}</div>
-      <div class="theme-symbols">${t.symbols.map(s=>`<span class="mini">${prefix==="tw"?(TW_NAMES[s]||s):s}</span>`).join("")}</div>
+      <div class="theme-symbols">${t.symbols.map(s=>`<span class="theme-symbol-pill">${prefix==="tw"?(TW_NAMES[s]||s):s}</span>`).join("")}</div>
     </div>`;
   }).join(""));
   document.querySelectorAll(`#${prefix}ThemeMap .theme-box`).forEach(el=>{

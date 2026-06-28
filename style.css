@@ -49,3 +49,28 @@ footer{text-align:center;padding:8px;color:var(--muted)}
 
 .source-note{color:var(--muted);border:1px solid rgba(0,183,255,.18);background:rgba(255,255,255,.025);border-radius:12px;padding:10px 12px;font-size:12px;line-height:1.6;margin-bottom:12px}
 .source-note a{color:#7dd3fc;margin-left:8px}
+
+
+/* RC3: prevent theme-stock names from sticking together */
+.theme-symbols{
+  display:flex !important;
+  flex-wrap:wrap !important;
+  gap:6px !important;
+  align-items:center !important;
+  margin-top:8px !important;
+}
+.theme-symbol-pill{
+  display:inline-flex !important;
+  align-items:center !important;
+  max-width:100%;
+  padding:3px 8px !important;
+  border:1px solid rgba(96, 216, 255, .28) !important;
+  border-radius:999px !important;
+  color:#9eeeff !important;
+  background:rgba(0, 200, 255, .045) !important;
+  font-size:11px !important;
+  line-height:1.35 !important;
+  white-space:nowrap !important;
+}
+.theme-box{ overflow:hidden; }
+.theme-title{ display:block; margin-bottom:4px; }
