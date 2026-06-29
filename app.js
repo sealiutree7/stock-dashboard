@@ -309,12 +309,45 @@ async function loadUSIndex(){
   applyFlash("usIndexBoard");
 }
 
+
+function pythonProxyBase(){
+  return localStorage.getItem("pythonProxyBase") || "http://127.0.0.1:5050";
+}
+async function pythonProxy(path){
+  const res = await fetch(`${pythonProxyBase()}${path}`, {cache:"no-store"});
+  const json = await res.json();
+  if(!res.ok || !json.ok) throw new Error(json.error || `Python proxy HTTP ${res.status}`);
+  return json.data;
+}
+async function hybridVIXTWN(){
+  try{ return await browserVIXTWN(); }
+  catch(e1){
+    console.warn("browser VIXTWN failed, try python proxy", e1);
+    try{ return await pythonProxy("/api/vixtwn"); }
+    catch(e2){
+      console.warn("python VIXTWN failed, fallback worker", e2);
+      throw new Error(`Browser: ${e1.message}; Python: ${e2.message}`);
+    }
+  }
+}
+async function hybridEconLight(){
+  try{ return await browserEconLight(); }
+  catch(e1){
+    console.warn("browser econ failed, try python proxy", e1);
+    try{ return await pythonProxy("/api/econ-light"); }
+    catch(e2){
+      console.warn("python econ failed, fallback worker", e2);
+      throw new Error(`Browser: ${e1.message}; Python: ${e2.message}`);
+    }
+  }
+}
+
 async function loadTWIndex(){
   const data = await api("/api/tw-index",1);
   const map = {};
   Object.values(data||{}).forEach(q=>{ map[q.symbol]=q; });
   try{
-    map["VIXTWN"] = await browserVIXTWN();
+    map["VIXTWN"] = await hybridVIXTWN();
   }catch(e){
     console.warn("browser VIXTWN failed", e);
     map["VIXTWN"] = map["VIXTWN"] || {ok:false,symbol:"VIXTWN",error:`Browser direct failed: ${e.message}`};
@@ -491,7 +524,7 @@ async function loadEconLight(){
   try{
     let e;
     try{
-      e = await browserEconLight();
+      e = await hybridEconLight();
     }catch(browserErr){
       console.warn("browser econ failed, fallback worker", browserErr);
       e = await api("/api/econ-light",1);
