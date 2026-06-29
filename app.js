@@ -129,11 +129,19 @@ function cardQuote(label,q){
     return `<div class="card"><div class="symbol"><span>${label}</span><span>No data</span></div><div class="card-meta">${q?.error || "資料源目前沒有回報數值"}</div></div>`;
   }
   const price=qPrice(q), ch=qChange(q), pct=qPct(q);
+  const seg=q.segments||{};
+  const segHtml=(seg.pre||seg.regular||seg.post||seg.latestRegular||seg.night)?`
+    <div class="mini-grid">
+      <div><span>盤前</span><b>${fmt(seg.pre?.last ?? seg.pre?.price)}</b></div>
+      <div><span>日盤</span><b>${fmt(seg.regular?.last ?? seg.latestRegular?.close ?? seg.dayClose?.price)}</b></div>
+      <div><span>夜盤</span><b>${fmt(seg.post?.last ?? seg.night?.last)}</b></div>
+    </div>`:"";
   return `<div class="card" data-key="${q.symbol||q.code||label}" data-price="${price ?? ""}">
     <div class="symbol"><span>${label}</span><span>${q.symbol||q.code||label}</span></div>
     <div class="session-line">目前：<span class="session-badge">${qLabel(q)}</span></div>
     <div class="price">${fmt(price)}</div>
     <div class="change">${changeHtml(ch,pct)}</div>
+    ${segHtml}
     <div class="card-meta">基準 ${fmt(q.base ?? q.previousClose)} · Open ${fmt(q.open)} · Prev ${fmt(q.previousClose)}<br/>High ${fmt(q.high)} · Low ${fmt(q.low)}<br/>Updated ${q.updatedAt?new Date(q.updatedAt).toLocaleTimeString():q.time||"--"}<br/>Source ${q.source||"--"}</div>
   </div>`;
 }
