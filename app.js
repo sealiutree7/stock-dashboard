@@ -109,6 +109,95 @@ async function api(path, retries=2){
   throw lastErr;
 }
 
+
+async function browserJson(url, options={}){
+  const res = await fetch(url, {
+    cache:"no-store",
+    credentials:"include",
+    mode:"cors",
+    ...options,
+    headers:{
+      "Accept":"application/json,text/plain,*/*",
+      "X-Requested-With":"XMLHttpRequest",
+      ...(options.headers||{})
+    }
+  });
+  if(!res.ok) throw new Error(`Browser HTTP ${res.status}`);
+  return await res.json();
+}
+function makeVixQuote(state, candle){
+  const price = Number(candle?.close ?? candle?.price ?? candle?.last);
+  const base = Number(state?.flat ?? state?.previousClose ?? state?.close);
+  const open = Number(candle?.open);
+  const high = Number(candle?.high);
+  const low = Number(candle?.low);
+  if(!Number.isFinite(price)) throw new Error("VIXTWN browser API no close price");
+  const change = Number.isFinite(base) && base !== 0 ? price - base : null;
+  const changePercent = Number.isFinite(base) && base !== 0 ? change / base * 100 : null;
+  return {
+    ok:true,
+    symbol:"VIXTWN",
+    price,
+    base:Number.isFinite(base)?base:null,
+    previousClose:Number.isFinite(base)?base:null,
+    change,
+    changePercent,
+    open:Number.isFinite(open)?open:null,
+    high:Number.isFinite(high)?high:null,
+    low:Number.isFinite(low)?low:null,
+    sessionLabel:"最近價",
+    market:"最近價",
+    updatedAt:new Date().toISOString(),
+    source:"Browser WantGoo API",
+    sourceSymbol:"/investure/vixtwn/minute-candlestick + commoditystate"
+  };
+}
+async function browserVIXTWN(){
+  const [state, candle] = await Promise.all([
+    browserJson("https://www.wantgoo.com/investure/vixtwn/commoditystate"),
+    browserJson("https://www.wantgoo.com/investure/vixtwn/minute-candlestick")
+  ]);
+  return makeVixQuote(state, candle);
+}
+function ndcLightName(score){
+  score = Number(score);
+  if(score <= 16) return "藍燈";
+  if(score <= 22) return "黃藍燈";
+  if(score <= 31) return "綠燈";
+  if(score <= 37) return "黃紅燈";
+  return "紅燈";
+}
+function ndcMonthLabel(yyyymm){
+  yyyymm = String(yyyymm || "");
+  return `${yyyymm.slice(0,4)}年${Number(yyyymm.slice(4,6))}月`;
+}
+async function browserEconLight(){
+  const data = await browserJson("https://index.ndc.gov.tw/n/json/lightscore", {
+    method:"POST",
+    headers:{"Content-Type":"application/json;charset=UTF-8"},
+    body:"{}"
+  });
+  const line = (data.line || [])
+    .map(x => ({x:String(x.x||""), y:Number(x.y)}))
+    .filter(x => x.x && Number.isFinite(x.y))
+    .sort((a,b)=>a.x.localeCompare(b.x));
+  if(!line.length) throw new Error("NDC browser API no line data");
+  const cur = line[line.length-1], prev = line[line.length-2];
+  return {
+    currentMonth:ndcMonthLabel(cur.x),
+    currentLight:ndcLightName(cur.y),
+    currentScore:cur.y,
+    prevMonth:prev ? ndcMonthLabel(prev.x) : "--",
+    prevLight:prev ? ndcLightName(prev.y) : "--",
+    prevScore:prev?.y ?? null,
+    sourceMode:"Browser 國發會 API",
+    marketRead:cur.y>=38?"中性偏多":cur.y>=32?"偏多觀望":cur.y>=23?"中性":"偏保守",
+    note:"已由瀏覽器直接讀取國發會 lightscore",
+    nextPublish:data.next || "--",
+    source:"https://index.ndc.gov.tw/n/json/lightscore"
+  };
+}
+
 function flashCard(el,key,price){
   if(!el || price==null) return;
   const old = lastPrice.get(key);
@@ -224,6 +313,13 @@ async function loadTWIndex(){
   const data = await api("/api/tw-index",1);
   const map = {};
   Object.values(data||{}).forEach(q=>{ map[q.symbol]=q; });
+  try{
+    map["VIXTWN"] = await browserVIXTWN();
+  }catch(e){
+    console.warn("browser VIXTWN failed", e);
+    map["VIXTWN"] = map["VIXTWN"] || {ok:false,symbol:"VIXTWN",error:`Browser direct failed: ${e.message}`};
+    if(map["VIXTWN"].ok===false) map["VIXTWN"].error = `${map["VIXTWN"].error || ""}；Browser direct failed: ${e.message}`;
+  }
   setHTML("twIndexBoard", TW_INDEX.map(x=>cardQuote(x.name,map[x.symbol])).join(""));
   applyFlash("twIndexBoard");
   updateWaveAnalysis(map["TXF8"] || map["^TWII"]);
@@ -393,7 +489,14 @@ function focusTheme(prefix,themeName){
 
 async function loadEconLight(){
   try{
-    const e=await api("/api/econ-light",1);
+    let e;
+    try{
+      e = await browserEconLight();
+    }catch(browserErr){
+      console.warn("browser econ failed, fallback worker", browserErr);
+      e = await api("/api/econ-light",1);
+      e.note = `${e.note || ""}${e.note ? "；" : ""}Browser direct failed: ${browserErr.message}`;
+    }
     setText("econLight", e.currentLight || "--");
     $("econLight")?.nextElementSibling && ($("econLight").nextElementSibling.textContent = `${e.currentMonth||""}｜分數：${e.currentScore??"--"}`);
     setText("econPrev", e.prevLight || "--");
