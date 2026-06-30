@@ -317,16 +317,24 @@ async function loadUSIndex(){
 
 
 /* =========================================================
-   Anjou Terminal v6.0 API Manager
+   Anjou Terminal v6.1 Ultimate
    Single data entry for VIXTWN and ECON light.
    Priority: Python Proxy -> Worker -> Browser direct
+   ========================================================= */
+
+
+
+/* =========================================================
+   Anjou Terminal v6.1 Ultimate API Manager
+   Worker is optional. Python Proxy is primary for TW/VIXTWN/ECON.
    ========================================================= */
 const API_MANAGER = {
   pythonBase(){
     return localStorage.getItem("pythonProxyBase") || "http://127.0.0.1:5050";
   },
   workerBase(){
-    return (typeof getWorkerBase === "function" ? getWorkerBase() : (localStorage.getItem("workerBase") || ""));
+    const v = (typeof getWorkerBase === "function" ? getWorkerBase() : (localStorage.getItem("workerBase") || ""));
+    return (v || "").trim().replace(/\/+$/,"");
   },
   async json(url, options={}){
     const res = await fetch(url, {cache:"no-store", ...options});
@@ -335,44 +343,35 @@ const API_MANAGER = {
     if(!res.ok) throw new Error((data && data.error) || `HTTP ${res.status}`);
     return data;
   },
-  async python(path){
-    const j = await this.json(`${this.pythonBase()}${path}`);
-    if(j && j.ok === false) throw new Error(j.error || "Python proxy returned ok:false");
+  unwrap(j){
+    if(j && j.ok === false) throw new Error(j.error || "source returned ok:false");
     return j && Object.prototype.hasOwnProperty.call(j,"data") ? j.data : j;
+  },
+  async python(path){
+    return this.unwrap(await this.json(`${this.pythonBase()}${path}`));
   },
   async worker(path){
     const base = this.workerBase();
-    if(!base) throw new Error("Cloudflare Worker URL empty");
-    const j = await this.json(`${base}${path}`);
-    if(j && j.ok === false) throw new Error(j.error || "Worker returned ok:false");
-    return j && Object.prototype.hasOwnProperty.call(j,"data") ? j.data : j;
+    if(!base) throw new Error("Worker URL empty, skipped");
+    return this.unwrap(await this.json(`${base}${path}`));
   },
   async browserJson(url, options={}){
-    const res = await fetch(url, {
-      cache:"no-store",
-      credentials:"include",
-      mode:"cors",
-      ...options,
-      headers:{
-        "Accept":"application/json,text/plain,*/*",
-        "X-Requested-With":"XMLHttpRequest",
-        ...(options.headers||{})
-      }
-    });
+    const res = await fetch(url, {cache:"no-store",credentials:"include",mode:"cors",...options,headers:{"Accept":"application/json,text/plain,*/*","X-Requested-With":"XMLHttpRequest",...(options.headers||{})}});
     if(!res.ok) throw new Error(`Browser HTTP ${res.status}`);
     return await res.json();
   },
-  async sourceChain(name, fns){
+  async sourceChain(name, fns, options={}){
     const errors = [];
     for(const fn of fns){
       try{
         const data = await fn();
         if(data !== undefined && data !== null) return data;
       }catch(e){
-        errors.push(`${name}: ${e.message}`);
+        errors.push(e.message);
         console.warn(`[API_MANAGER] ${name} source failed`, e);
       }
     }
+    if(options.silent) return null;
     throw new Error(errors.join("；"));
   },
   async vixtwn(){
@@ -391,17 +390,7 @@ const API_MANAGER = {
         const base = Number(state?.flat ?? state?.previousClose ?? state?.close);
         const change = Number.isFinite(base) && base !== 0 ? price - base : null;
         const changePercent = Number.isFinite(base) && base !== 0 ? change / base * 100 : null;
-        return {
-          ok:true,symbol:"VIXTWN",price,
-          base:Number.isFinite(base)?base:null,
-          previousClose:Number.isFinite(base)?base:null,
-          change,changePercent,
-          open:Number.isFinite(Number(candle?.open))?Number(candle.open):null,
-          high:Number.isFinite(Number(candle?.high))?Number(candle.high):null,
-          low:Number.isFinite(Number(candle?.low))?Number(candle.low):null,
-          updatedAt:new Date().toISOString(),
-          source:"Browser WantGoo API"
-        };
+        return {ok:true,symbol:"VIXTWN",price,base:Number.isFinite(base)?base:null,previousClose:Number.isFinite(base)?base:null,change,changePercent,open:Number.isFinite(Number(candle?.open))?Number(candle.open):null,high:Number.isFinite(Number(candle?.high))?Number(candle.high):null,low:Number.isFinite(Number(candle?.low))?Number(candle.low):null,updatedAt:new Date().toISOString(),source:"Browser WantGoo API"};
       }
     ]);
   },
@@ -410,47 +399,42 @@ const API_MANAGER = {
       async()=> await this.python("/api/econ-light"),
       async()=> await this.worker("/api/econ-light"),
       async()=> {
-        const data = await this.browserJson("https://index.ndc.gov.tw/n/json/lightscore", {
-          method:"POST",
-          headers:{"Content-Type":"application/json;charset=UTF-8"},
-          body:"{}"
-        });
+        const data = await this.browserJson("https://index.ndc.gov.tw/n/json/lightscore", {method:"POST",headers:{"Content-Type":"application/json;charset=UTF-8"},body:"{}"});
         const line = (data.line||[]).map(x=>({x:String(x.x||""),y:Number(x.y)})).filter(x=>x.x&&Number.isFinite(x.y)).sort((a,b)=>a.x.localeCompare(b.x));
         if(!line.length) throw new Error("NDC browser API no line");
         const cur=line[line.length-1], prev=line[line.length-2];
         const light = s => s<=16?"藍燈":s<=22?"黃藍燈":s<=31?"綠燈":s<=37?"黃紅燈":"紅燈";
         const ml = s => `${String(s).slice(0,4)}年${Number(String(s).slice(4,6))}月`;
-        return {
-          currentMonth:ml(cur.x),currentLight:light(cur.y),currentScore:cur.y,
-          prevMonth:prev?ml(prev.x):"--",prevLight:prev?light(prev.y):"--",prevScore:prev?.y??null,
-          sourceMode:"Browser 國發會 API",
-          marketRead:cur.y>=38?"中性偏多":cur.y>=32?"偏多觀望":cur.y>=23?"中性":"偏保守",
-          note:"Browser direct lightscore",
-          nextPublish:data.next || "--",
-          source:"https://index.ndc.gov.tw/n/json/lightscore"
-        };
+        return {currentMonth:ml(cur.x),currentLight:light(cur.y),currentScore:cur.y,prevMonth:prev?ml(prev.x):"--",prevLight:prev?light(prev.y):"--",prevScore:prev?.y??null,sourceMode:"Browser 國發會 API",marketRead:cur.y>=38?"中性偏多":cur.y>=32?"偏多觀望":cur.y>=23?"中性":"偏保守",note:"Browser direct lightscore",nextPublish:data.next||"--",source:"https://index.ndc.gov.tw/n/json/lightscore"};
       }
     ]);
   },
   async twIndex(){
-    const data = await this.worker("/api/tw-index");
-    const map = {};
-    Object.values(data||{}).forEach(q=>{ if(q?.symbol) map[q.symbol]=q; });
-    map["VIXTWN"] = await this.vixtwn();
+    let map = await this.sourceChain("TW_INDEX", [
+      async()=> await this.python("/api/tw-index"),
+      async()=> await this.worker("/api/tw-index")
+    ], {silent:true});
+    if(!map || typeof map !== "object") map = {};
+
+    try{
+      map["VIXTWN"] = await this.vixtwn();
+    }catch(e){
+      console.warn("VIXTWN all sources failed", e);
+      map["VIXTWN"] = {ok:false,symbol:"VIXTWN",error:`VIXTWN 讀取失敗：${e.message}`};
+    }
+
+    for(const sym of ["^TWII","^TWOII","^TEII","TXF8"]){
+      if(!map[sym]) map[sym] = {ok:false,symbol:sym,error:"資料源暫時無回報"};
+    }
     return map;
   }
 };
 
 async function loadTWIndex(){
-  try{
-    const map = await API_MANAGER.twIndex();
-    setHTML("twIndexBoard", TW_INDEX.map(x=>cardQuote(x.name,map[x.symbol])).join(""));
-    applyFlash("twIndexBoard");
-    updateWaveAnalysis(map["TXF8"] || map["^TWII"]);
-  }catch(e){
-    console.warn("loadTWIndex failed", e);
-    setHTML("twIndexBoard", `<div class="card"><div class="symbol"><span>台股大盤指數</span><span>Error</span></div><div class="card-meta">${e.message}</div></div>`);
-  }
+  const map = await API_MANAGER.twIndex();
+  setHTML("twIndexBoard", TW_INDEX.map(x=>cardQuote(x.name,map[x.symbol])).join(""));
+  applyFlash("twIndexBoard");
+  updateWaveAnalysis(map["TXF8"] || map["^TWII"]);
 }
 
 async function loadUSWatchlist(){
