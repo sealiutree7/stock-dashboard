@@ -313,54 +313,144 @@ async function loadUSIndex(){
 
 
 
-/* v5.5: VIXTWN / 景氣燈固定優先走本機 Python Proxy */
-function pythonProxyBase(){
-  return localStorage.getItem("pythonProxyBase") || "http://127.0.0.1:5050";
-}
-async function pythonProxy(path){
-  const res = await fetch(`${pythonProxyBase()}${path}`, {cache:"no-store"});
-  const json = await res.json();
-  if(!res.ok || !json.ok) throw new Error(json.error || `Python proxy HTTP ${res.status}`);
-  return json.data;
-}
-async function hybridVIXTWN(){
-  try{ return await pythonProxy("/api/vixtwn"); }
-  catch(e1){
-    console.warn("python VIXTWN failed, try browser direct", e1);
-    try{ return await browserVIXTWN(); }
-    catch(e2){
-      console.warn("browser VIXTWN failed", e2);
-      throw new Error(`Python: ${e1.message}; Browser: ${e2.message}`);
+
+
+
+/* =========================================================
+   Anjou Terminal v6.0 API Manager
+   Single data entry for VIXTWN and ECON light.
+   Priority: Python Proxy -> Worker -> Browser direct
+   ========================================================= */
+const API_MANAGER = {
+  pythonBase(){
+    return localStorage.getItem("pythonProxyBase") || "http://127.0.0.1:5050";
+  },
+  workerBase(){
+    return (typeof getWorkerBase === "function" ? getWorkerBase() : (localStorage.getItem("workerBase") || ""));
+  },
+  async json(url, options={}){
+    const res = await fetch(url, {cache:"no-store", ...options});
+    let data = null;
+    try{ data = await res.json(); }catch(e){}
+    if(!res.ok) throw new Error((data && data.error) || `HTTP ${res.status}`);
+    return data;
+  },
+  async python(path){
+    const j = await this.json(`${this.pythonBase()}${path}`);
+    if(j && j.ok === false) throw new Error(j.error || "Python proxy returned ok:false");
+    return j && Object.prototype.hasOwnProperty.call(j,"data") ? j.data : j;
+  },
+  async worker(path){
+    const base = this.workerBase();
+    if(!base) throw new Error("Cloudflare Worker URL empty");
+    const j = await this.json(`${base}${path}`);
+    if(j && j.ok === false) throw new Error(j.error || "Worker returned ok:false");
+    return j && Object.prototype.hasOwnProperty.call(j,"data") ? j.data : j;
+  },
+  async browserJson(url, options={}){
+    const res = await fetch(url, {
+      cache:"no-store",
+      credentials:"include",
+      mode:"cors",
+      ...options,
+      headers:{
+        "Accept":"application/json,text/plain,*/*",
+        "X-Requested-With":"XMLHttpRequest",
+        ...(options.headers||{})
+      }
+    });
+    if(!res.ok) throw new Error(`Browser HTTP ${res.status}`);
+    return await res.json();
+  },
+  async sourceChain(name, fns){
+    const errors = [];
+    for(const fn of fns){
+      try{
+        const data = await fn();
+        if(data !== undefined && data !== null) return data;
+      }catch(e){
+        errors.push(`${name}: ${e.message}`);
+        console.warn(`[API_MANAGER] ${name} source failed`, e);
+      }
     }
+    throw new Error(errors.join("；"));
+  },
+  async vixtwn(){
+    return this.sourceChain("VIXTWN", [
+      async()=> await this.python("/api/vixtwn"),
+      async()=> {
+        const data = await this.worker("/api/quotes?symbols=VIXTWN");
+        return data?.VIXTWN || data?.results?.find?.(x=>x.symbol==="VIXTWN") || data;
+      },
+      async()=> {
+        const [state, candle] = await Promise.all([
+          this.browserJson("https://www.wantgoo.com/investure/vixtwn/commoditystate"),
+          this.browserJson("https://www.wantgoo.com/investure/vixtwn/minute-candlestick")
+        ]);
+        const price = Number(candle?.close ?? candle?.price ?? candle?.last);
+        const base = Number(state?.flat ?? state?.previousClose ?? state?.close);
+        const change = Number.isFinite(base) && base !== 0 ? price - base : null;
+        const changePercent = Number.isFinite(base) && base !== 0 ? change / base * 100 : null;
+        return {
+          ok:true,symbol:"VIXTWN",price,
+          base:Number.isFinite(base)?base:null,
+          previousClose:Number.isFinite(base)?base:null,
+          change,changePercent,
+          open:Number.isFinite(Number(candle?.open))?Number(candle.open):null,
+          high:Number.isFinite(Number(candle?.high))?Number(candle.high):null,
+          low:Number.isFinite(Number(candle?.low))?Number(candle.low):null,
+          updatedAt:new Date().toISOString(),
+          source:"Browser WantGoo API"
+        };
+      }
+    ]);
+  },
+  async econLight(){
+    return this.sourceChain("ECON", [
+      async()=> await this.python("/api/econ-light"),
+      async()=> await this.worker("/api/econ-light"),
+      async()=> {
+        const data = await this.browserJson("https://index.ndc.gov.tw/n/json/lightscore", {
+          method:"POST",
+          headers:{"Content-Type":"application/json;charset=UTF-8"},
+          body:"{}"
+        });
+        const line = (data.line||[]).map(x=>({x:String(x.x||""),y:Number(x.y)})).filter(x=>x.x&&Number.isFinite(x.y)).sort((a,b)=>a.x.localeCompare(b.x));
+        if(!line.length) throw new Error("NDC browser API no line");
+        const cur=line[line.length-1], prev=line[line.length-2];
+        const light = s => s<=16?"藍燈":s<=22?"黃藍燈":s<=31?"綠燈":s<=37?"黃紅燈":"紅燈";
+        const ml = s => `${String(s).slice(0,4)}年${Number(String(s).slice(4,6))}月`;
+        return {
+          currentMonth:ml(cur.x),currentLight:light(cur.y),currentScore:cur.y,
+          prevMonth:prev?ml(prev.x):"--",prevLight:prev?light(prev.y):"--",prevScore:prev?.y??null,
+          sourceMode:"Browser 國發會 API",
+          marketRead:cur.y>=38?"中性偏多":cur.y>=32?"偏多觀望":cur.y>=23?"中性":"偏保守",
+          note:"Browser direct lightscore",
+          nextPublish:data.next || "--",
+          source:"https://index.ndc.gov.tw/n/json/lightscore"
+        };
+      }
+    ]);
+  },
+  async twIndex(){
+    const data = await this.worker("/api/tw-index");
+    const map = {};
+    Object.values(data||{}).forEach(q=>{ if(q?.symbol) map[q.symbol]=q; });
+    map["VIXTWN"] = await this.vixtwn();
+    return map;
   }
-}
-async function hybridEconLight(){
-  try{ return await pythonProxy("/api/econ-light"); }
-  catch(e1){
-    console.warn("python econ failed, try browser direct", e1);
-    try{ return await browserEconLight(); }
-    catch(e2){
-      console.warn("browser econ failed", e2);
-      throw new Error(`Python: ${e1.message}; Browser: ${e2.message}`);
-    }
-  }
-}
+};
 
 async function loadTWIndex(){
-  const data = await api("/api/tw-index",1);
-  const map = {};
-  Object.values(data||{}).forEach(q=>{ map[q.symbol]=q; });
-
   try{
-    map["VIXTWN"] = await hybridVIXTWN();
+    const map = await API_MANAGER.twIndex();
+    setHTML("twIndexBoard", TW_INDEX.map(x=>cardQuote(x.name,map[x.symbol])).join(""));
+    applyFlash("twIndexBoard");
+    updateWaveAnalysis(map["TXF8"] || map["^TWII"]);
   }catch(e){
-    console.warn("VIXTWN proxy failed", e);
-    map["VIXTWN"] = {ok:false, symbol:"VIXTWN", error:`Python Proxy 未成功：${e.message}`};
+    console.warn("loadTWIndex failed", e);
+    setHTML("twIndexBoard", `<div class="card"><div class="symbol"><span>台股大盤指數</span><span>Error</span></div><div class="card-meta">${e.message}</div></div>`);
   }
-
-  setHTML("twIndexBoard", TW_INDEX.map(x=>cardQuote(x.name,map[x.symbol])).join(""));
-  applyFlash("twIndexBoard");
-  updateWaveAnalysis(map["TXF8"] || map["^TWII"]);
 }
 
 async function loadUSWatchlist(){
@@ -527,24 +617,22 @@ function focusTheme(prefix,themeName){
 
 async function loadEconLight(){
   try{
-    let e;
-    try{
-      e = await hybridEconLight();
-    }catch(proxyErr){
-      console.warn("econ proxy failed, fallback worker", proxyErr);
-      e = await api("/api/econ-light",1);
-      e.note = `${e.note || ""}${e.note ? "；" : ""}Python Proxy failed: ${proxyErr.message}`;
-    }
+    const e = await API_MANAGER.econLight();
 
     setText("econLight", e.currentLight || "--");
     $("econLight")?.nextElementSibling && ($("econLight").nextElementSibling.textContent = `${e.currentMonth||""}｜分數：${e.currentScore??"--"}`);
+
     setText("econPrev", e.prevLight || "--");
     $("econPrev")?.nextElementSibling && ($("econPrev").nextElementSibling.textContent = `${e.prevMonth||""}｜分數：${e.prevScore??"--"}`);
+
     setText("econPhase", e.sourceMode || "--");
-    $("econPhase")?.nextElementSibling && ($("econPhase").nextElementSibling.textContent = e.note || "");
+    $("econPhase")?.nextElementSibling && ($("econPhase").nextElementSibling.textContent = `${e.note || ""}${e.nextPublish ? "｜下次發布：" + e.nextPublish : ""}`);
+
     setText("econRead", e.marketRead || "--");
   }catch(e){
     console.warn("econ failed",e);
+    setText("econPhase", "讀取失敗");
+    $("econPhase")?.nextElementSibling && ($("econPhase").nextElementSibling.textContent = e.message);
   }
 }
 
