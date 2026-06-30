@@ -310,6 +310,10 @@ async function loadUSIndex(){
 }
 
 
+
+
+
+/* v5.5: VIXTWN / 景氣燈固定優先走本機 Python Proxy */
 function pythonProxyBase(){
   return localStorage.getItem("pythonProxyBase") || "http://127.0.0.1:5050";
 }
@@ -320,24 +324,24 @@ async function pythonProxy(path){
   return json.data;
 }
 async function hybridVIXTWN(){
-  try{ return await browserVIXTWN(); }
+  try{ return await pythonProxy("/api/vixtwn"); }
   catch(e1){
-    console.warn("browser VIXTWN failed, try python proxy", e1);
-    try{ return await pythonProxy("/api/vixtwn"); }
+    console.warn("python VIXTWN failed, try browser direct", e1);
+    try{ return await browserVIXTWN(); }
     catch(e2){
-      console.warn("python VIXTWN failed, fallback worker", e2);
-      throw new Error(`Browser: ${e1.message}; Python: ${e2.message}`);
+      console.warn("browser VIXTWN failed", e2);
+      throw new Error(`Python: ${e1.message}; Browser: ${e2.message}`);
     }
   }
 }
 async function hybridEconLight(){
-  try{ return await browserEconLight(); }
+  try{ return await pythonProxy("/api/econ-light"); }
   catch(e1){
-    console.warn("browser econ failed, try python proxy", e1);
-    try{ return await pythonProxy("/api/econ-light"); }
+    console.warn("python econ failed, try browser direct", e1);
+    try{ return await browserEconLight(); }
     catch(e2){
-      console.warn("python econ failed, fallback worker", e2);
-      throw new Error(`Browser: ${e1.message}; Python: ${e2.message}`);
+      console.warn("browser econ failed", e2);
+      throw new Error(`Python: ${e1.message}; Browser: ${e2.message}`);
     }
   }
 }
@@ -346,13 +350,14 @@ async function loadTWIndex(){
   const data = await api("/api/tw-index",1);
   const map = {};
   Object.values(data||{}).forEach(q=>{ map[q.symbol]=q; });
+
   try{
     map["VIXTWN"] = await hybridVIXTWN();
   }catch(e){
-    console.warn("browser VIXTWN failed", e);
-    map["VIXTWN"] = map["VIXTWN"] || {ok:false,symbol:"VIXTWN",error:`Browser direct failed: ${e.message}`};
-    if(map["VIXTWN"].ok===false) map["VIXTWN"].error = `${map["VIXTWN"].error || ""}；Browser direct failed: ${e.message}`;
+    console.warn("VIXTWN proxy failed", e);
+    map["VIXTWN"] = {ok:false, symbol:"VIXTWN", error:`Python Proxy 未成功：${e.message}`};
   }
+
   setHTML("twIndexBoard", TW_INDEX.map(x=>cardQuote(x.name,map[x.symbol])).join(""));
   applyFlash("twIndexBoard");
   updateWaveAnalysis(map["TXF8"] || map["^TWII"]);
@@ -525,11 +530,12 @@ async function loadEconLight(){
     let e;
     try{
       e = await hybridEconLight();
-    }catch(browserErr){
-      console.warn("browser econ failed, fallback worker", browserErr);
+    }catch(proxyErr){
+      console.warn("econ proxy failed, fallback worker", proxyErr);
       e = await api("/api/econ-light",1);
-      e.note = `${e.note || ""}${e.note ? "；" : ""}Browser direct failed: ${browserErr.message}`;
+      e.note = `${e.note || ""}${e.note ? "；" : ""}Python Proxy failed: ${proxyErr.message}`;
     }
+
     setText("econLight", e.currentLight || "--");
     $("econLight")?.nextElementSibling && ($("econLight").nextElementSibling.textContent = `${e.currentMonth||""}｜分數：${e.currentScore??"--"}`);
     setText("econPrev", e.prevLight || "--");
