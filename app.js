@@ -317,7 +317,7 @@ async function loadUSIndex(){
 
 
 /* =========================================================
-   Anjou Terminal v6.1 Ultimate
+   Anjou Terminal v6.2 Localhost PNA Fix
    Single data entry for VIXTWN and ECON light.
    Priority: Python Proxy -> Worker -> Browser direct
    ========================================================= */
@@ -325,12 +325,17 @@ async function loadUSIndex(){
 
 
 /* =========================================================
-   Anjou Terminal v6.1 Ultimate API Manager
+   Anjou Terminal v6.2 Localhost PNA Fix API Manager
    Worker is optional. Python Proxy is primary for TW/VIXTWN/ECON.
    ========================================================= */
 const API_MANAGER = {
+  pythonBases(){
+    const custom = localStorage.getItem("pythonProxyBase");
+    if(custom) return [custom.replace(/\/+$/,"")];
+    return ["http://127.0.0.1:5050", "http://localhost:5050"];
+  },
   pythonBase(){
-    return localStorage.getItem("pythonProxyBase") || "http://127.0.0.1:5050";
+    return this.pythonBases()[0];
   },
   workerBase(){
     const v = (typeof getWorkerBase === "function" ? getWorkerBase() : (localStorage.getItem("workerBase") || ""));
@@ -348,7 +353,16 @@ const API_MANAGER = {
     return j && Object.prototype.hasOwnProperty.call(j,"data") ? j.data : j;
   },
   async python(path){
-    return this.unwrap(await this.json(`${this.pythonBase()}${path}`));
+    const errors = [];
+    for(const base of this.pythonBases()){
+      try{
+        return this.unwrap(await this.json(`${base}${path}`));
+      }catch(e){
+        errors.push(`${base}: ${e.message}`);
+        console.warn(`[API_MANAGER] python proxy failed ${base}${path}`, e);
+      }
+    }
+    throw new Error(errors.join("；"));
   },
   async worker(path){
     const base = this.workerBase();
