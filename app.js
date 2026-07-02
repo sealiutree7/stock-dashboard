@@ -317,7 +317,7 @@ async function loadUSIndex(){
 
 
 /* =========================================================
-   Anjou Terminal v6.2 Localhost PNA Fix
+   Anjou Terminal v6.3 Local App
    Single data entry for VIXTWN and ECON light.
    Priority: Python Proxy -> Worker -> Browser direct
    ========================================================= */
@@ -325,14 +325,15 @@ async function loadUSIndex(){
 
 
 /* =========================================================
-   Anjou Terminal v6.2 Localhost PNA Fix API Manager
+   Anjou Terminal v6.3 Local App API Manager
    Worker is optional. Python Proxy is primary for TW/VIXTWN/ECON.
    ========================================================= */
 const API_MANAGER = {
   pythonBases(){
     const custom = localStorage.getItem("pythonProxyBase");
     if(custom) return [custom.replace(/\/+$/,"")];
-    return ["http://127.0.0.1:5050", "http://localhost:5050"];
+    const localOrigin = (location.hostname === "127.0.0.1" || location.hostname === "localhost") ? location.origin : null;
+    return localOrigin ? [localOrigin, "http://127.0.0.1:5050", "http://localhost:5050"] : ["http://127.0.0.1:5050", "http://localhost:5050"];
   },
   pythonBase(){
     return this.pythonBases()[0];
