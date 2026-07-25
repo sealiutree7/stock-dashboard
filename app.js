@@ -1,3 +1,16 @@
+
+function setupCloudProxyBase(){
+  try{
+    const u = new URL(location.href);
+    const p = u.searchParams.get("proxy");
+    if(p){
+      localStorage.setItem("pythonProxyBase", p.replace(/\/+$/,""));
+      console.log("[Anjou] proxy base set from URL:", p);
+    }
+  }catch(e){}
+}
+setupCloudProxyBase();
+
 const $ = (id) => document.getElementById(id);
 
 const US_INDEX = ["SPY","VOO","QQQ","DIA","IWM","SOXX","SMH"];
@@ -317,7 +330,7 @@ async function loadUSIndex(){
 
 
 /* =========================================================
-   Anjou Terminal v6.3 Local App
+   Anjou Terminal v7.0 Cloud Deploy
    Single data entry for VIXTWN and ECON light.
    Priority: Python Proxy -> Worker -> Browser direct
    ========================================================= */
@@ -325,15 +338,17 @@ async function loadUSIndex(){
 
 
 /* =========================================================
-   Anjou Terminal v6.3 Local App API Manager
+   Anjou Terminal v7.0 Cloud Deploy API Manager
    Worker is optional. Python Proxy is primary for TW/VIXTWN/ECON.
    ========================================================= */
 const API_MANAGER = {
   pythonBases(){
     const custom = localStorage.getItem("pythonProxyBase");
     if(custom) return [custom.replace(/\/+$/,"")];
-    const localOrigin = (location.hostname === "127.0.0.1" || location.hostname === "localhost") ? location.origin : null;
-    return localOrigin ? [localOrigin, "http://127.0.0.1:5050", "http://localhost:5050"] : ["http://127.0.0.1:5050", "http://localhost:5050"];
+    const isLocal = (location.hostname === "127.0.0.1" || location.hostname === "localhost");
+    const isGithub = location.hostname.includes("github.io");
+    if(!isGithub && !isLocal && location.origin.startsWith("http")) return [location.origin];
+    return ["http://127.0.0.1:5050", "http://localhost:5050"];
   },
   pythonBase(){
     return this.pythonBases()[0];
